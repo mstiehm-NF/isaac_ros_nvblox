@@ -4,10 +4,10 @@
     voxel_size: 0.05
     use_tf_transforms: true
     # multi mapper
-    mapping_type: "static_tsdf"  # ["static_tsdf", "static_occupancy"]
+    mapping_type: "static_occupancy"  # ["static_tsdf", "static_occupancy"]
     connected_mask_component_size_threshold: 2000
     # esdf settings
-    compute_esdf: true
+    compute_esdf: false
     esdf_update_rate_hz: 10.0
     esdf_2d: true
     publish_esdf_distance_slice: true
@@ -15,7 +15,7 @@
     esdf_2d_min_height: 0.025
     esdf_2d_max_height: 0.7
     # mesh settings
-    compute_mesh: true
+    compute_mesh: false
     mesh_update_rate_hz: 5.0
     # color settings
     use_color: true
@@ -37,7 +37,7 @@
     max_poll_rate_hz: 100.0
     maximum_sensor_message_queue_length: 30
     # Map clearing settings
-    map_clearing_radius_m: 10.0 # no map clearing if < 0.0
+    map_clearing_radius_m: -1.0 # no map clearing if < 0.0
     map_clearing_frame_id: "base_link"
     clear_outside_radius_rate_hz: 1.0
     # QoS settings
@@ -49,13 +49,13 @@
 
     static_mapper:
       # mapper
-      do_depth_preprocessing: false
+      do_depth_preprocessing: true
       depth_preprocessing_num_dilations: 3
       # projective integrator (tsdf/color/occupancy)
       projective_integrator_max_integration_distance_m: 7.0
       lidar_projective_integrator_max_integration_distance_m: 10.0
       projective_integrator_truncation_distance_vox: 4.0
-      weighting_mode: "inverse_square_tsdf_distance_penalty"
+      weighting_mode: "inverse_square_dropoff"
       projective_integrator_max_weight: 5.0
       # occupancy integrator
       free_region_occupancy_probability: 0.45

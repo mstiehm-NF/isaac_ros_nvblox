@@ -32,7 +32,7 @@ def generate_launch_description():
 
     # Launch Arguments
     run_rviz_arg = DeclareLaunchArgument(
-        'run_rviz', default_value='True',
+        'run_rviz', default_value='False',
         description='Whether to start RVIZ')
     from_bag_arg = DeclareLaunchArgument(
         'from_bag', default_value='False',
@@ -41,7 +41,7 @@ def generate_launch_description():
         'bag_path', default_value='rosbag2*',
         description='Path of the bag (only used if from_bag == True)')
     flatten_odometry_to_2d_arg = DeclareLaunchArgument(
-        'flatten_odometry_to_2d', default_value='False',
+        'flatten_odometry_to_2d', default_value='True',
         description='Whether to flatten the odometry to 2D (camera only moving on XY-plane).')
     global_frame = LaunchConfiguration('global_frame',
                                        default='odom')
