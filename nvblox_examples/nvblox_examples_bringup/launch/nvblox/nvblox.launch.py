@@ -61,6 +61,7 @@ def generate_launch_description():
     # If we do not attach to a shared component container we have to create our own container.
     nvblox_container = Node(
         name=component_container_name_arg,
+        namespace=LaunchConfiguration('namespace'),
         package='rclcpp_components',
         executable='component_container_mt',
         output='screen',
@@ -72,6 +73,7 @@ def generate_launch_description():
         composable_node_descriptions=[
             ComposableNode(
             name='nvblox_node',
+            namespace=LaunchConfiguration('namespace'),
             package='nvblox_ros',
             plugin='nvblox::NvbloxNode')])
 
@@ -92,17 +94,17 @@ def generate_launch_description():
 
         # Remappings for realsense data
         SetRemap(src=['depth/image'],
-                 dst=['/camera/realsense_splitter_node/output/depth'],
+                 dst=['realsense_splitter_node/output/depth'],
                  condition=setup_for_realsense),
-        SetRemap(src=['depth/camera_info'],
-                 dst=['/camera/depth/camera_info'],
-                 condition=setup_for_realsense),
+        # SetRemap(src=['depth/camera_info'],
+        #          dst=['depth/camera_info'],
+        #          condition=setup_for_realsense),
         SetRemap(src=['color/image'],
-                 dst=['/camera/color/image_raw'],
+                 dst=['color/image_raw'],
                  condition=setup_for_realsense),
-        SetRemap(src=['color/camera_info'],
-                 dst=['/camera/color/camera_info'],
-                 condition=setup_for_realsense),
+        # SetRemap(src=['color/camera_info'],
+        #          dst=['color/camera_info'],
+        #          condition=setup_for_realsense),
 
         # Remappings for zed
 	    SetRemap(src=['depth/image'],

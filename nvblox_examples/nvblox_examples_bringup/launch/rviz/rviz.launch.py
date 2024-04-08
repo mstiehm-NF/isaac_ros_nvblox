@@ -31,6 +31,7 @@ def generate_launch_description():
 
     # Rviz node
     rviz = Node(
+        namespace=LaunchConfiguration('namespace'),
         package='rviz2',
         executable='rviz2',
         arguments=['-d', config_path,       # set the config

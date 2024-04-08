@@ -51,7 +51,7 @@ def generate_launch_description():
         composable_node_descriptions=[
             # RealSense splitter node
             ComposableNode(
-                namespace="camera",
+                namespace=LaunchConfiguration('namespace'),
                 name='realsense_splitter_node',
                 package='realsense_splitter',
                 plugin='nvblox::RealsenseSplitterNode',
@@ -59,19 +59,18 @@ def generate_launch_description():
                     'input_qos': 'SENSOR_DATA',
                     'output_qos': 'SENSOR_DATA'
                 }],
-                remappings=[('input/infra_1', '/camera/infra1/image_rect_raw'),
-                            ('input/infra_1_metadata', '/camera/infra1/metadata'),
-                            ('input/infra_2', '/camera/infra2/image_rect_raw'),
-                            ('input/infra_2_metadata', '/camera/infra2/metadata'),
-                            ('input/depth', '/camera/depth/image_rect_raw'),
-                            ('input/depth_metadata', '/camera/depth/metadata'),
-                            ('input/pointcloud', '/camera/depth/color/points'),
-                            ('input/pointcloud_metadata',
-                             '/camera/depth/metadata'),
+                remappings=[('input/infra_1', 'infra1/image_rect_raw'),
+                            ('input/infra_1_metadata', 'infra1/metadata'),
+                            ('input/infra_2', 'infra2/image_rect_raw'),
+                            ('input/infra_2_metadata', 'infra2/metadata'),
+                            ('input/depth', 'depth/image_rect_raw'),
+                            ('input/depth_metadata', 'depth/metadata'),
+                            ('input/pointcloud', 'depth/color/points'),
+                            ('input/pointcloud_metadata', 'depth/metadata'),
                             ]),
             # Node Factory
             ComposableNode(
-                namespace="camera",
+                namespace=LaunchConfiguration('namespace'),
                 package='realsense2_camera',
                 plugin='realsense2_camera::RealSenseNodeFactory',
                 parameters=[config_file])])

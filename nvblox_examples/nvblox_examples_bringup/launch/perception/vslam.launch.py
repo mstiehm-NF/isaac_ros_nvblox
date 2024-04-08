@@ -40,6 +40,7 @@ def generate_launch_description():
     # If we do not attach to a shared component container we have to create our own container.
     vslam_container = Node(
         name=component_container_name_arg,
+        namespace=LaunchConfiguration('namespace'),
         package='rclcpp_components',
         executable='component_container_mt',
         output='screen',
@@ -52,12 +53,14 @@ def generate_launch_description():
             # Vslam node
             ComposableNode(
                 name='visual_slam_node',
+                namespace=LaunchConfiguration('namespace'),
                 package='isaac_ros_visual_slam',
                 plugin='nvidia::isaac_ros::visual_slam::VisualSlamNode'),
 
             # Odom flattener node
             ComposableNode(
                 name='odometry_flattener_node',
+                namespace=LaunchConfiguration('namespace'),
                 package='odometry_flattener',
                 plugin='nvblox::OdometryFlattenerNode',
                 condition=IfCondition(LaunchConfiguration('run_odometry_flattening'))
@@ -80,14 +83,24 @@ def generate_launch_description():
         # Set general parameters
         SetParameter(name='enable_debug_mode', value=False),
         SetParameter(name='debug_dump_path', value='/tmp/cuvslam'),
-        SetParameter(name='enable_slam_visualization', value=True),
-        SetParameter(name='enable_observations_view', value=True),
-        SetParameter(name='enable_landmarks_view', value=True),
+        SetParameter(name='enable_slam_visualization', value=False),
+        SetParameter(name='enable_observations_view', value=False),
+        SetParameter(name='enable_landmarks_view', value=False),
         SetParameter(name='map_frame', value='map'),
         SetParameter(name='enable_localization_n_mapping', value=False),
         SetParameter(name='publish_odom_to_base_tf', value=True),
         SetParameter(name='publish_map_to_odom_tf', value=False),
         SetParameter(name='invert_odom_to_base_tf', value=True),
+        SetParameter(name='input_imu_frame', value='camera_gyro_optical_frame'),
+        SetParameter(name='enable_imu_fusion', value=True),
+        SetParameter(name='gyro_noise_density', value=0.000244),
+        SetParameter(name='gyro_random_walk', value=0.000019393),
+        SetParameter(name='accel_noise_density', value=0.001862),
+        SetParameter(name='accel_random_walk', value=0.003),
+        SetParameter(name='calibration_frequency', value=200.0),
+        SetParameter(name='img_jitter_threshold_ms', value=40.00),
+        SetParameter(name='path_max_size', value=100000),
+        SetParameter(name='force_planar_mode', value=True),
         # If the odometry flattener is running, the vslam output odom_frame
         # can not be set to the output_odom_frame.
         # In that case, the vslam output odom_frame is first flattened by the
@@ -120,7 +133,7 @@ def generate_launch_description():
                      condition=setup_for_realsense),
         SetParameter(name='rectified_images', value=True,
                      condition=setup_for_realsense),
-        SetParameter(name='base_frame', value='camera_link',
+        SetParameter(name='base_frame', value='base_link',
                      condition=setup_for_realsense),
 
         # Remappings for Isaac Sim
@@ -138,18 +151,22 @@ def generate_launch_description():
                  condition=setup_for_isaac_sim),
 
         # Remappings for Realsense
-        SetRemap(src=['/stereo_camera/left/camera_info'],
-                 dst=['/camera/infra1/camera_info'],
+        SetRemap(src=['stereo_camera/left/camera_info'],
+                 dst=['infra1/camera_info'],
                  condition=setup_for_realsense),
-        SetRemap(src=['/stereo_camera/right/camera_info'],
-                 dst=['/camera/infra2/camera_info'],
+        SetRemap(src=['stereo_camera/right/camera_info'],
+                 dst=['infra2/camera_info'],
                  condition=setup_for_realsense),
-        SetRemap(src=['/stereo_camera/left/image'],
-                 dst=['/camera/realsense_splitter_node/output/infra_1'],
+        SetRemap(src=['stereo_camera/left/image'],
+                 dst=['realsense_splitter_node/output/infra_1'],
                  condition=setup_for_realsense),
-        SetRemap(src=['/stereo_camera/right/image'],
-                 dst=['/camera/realsense_splitter_node/output/infra_2'],
+        SetRemap(src=['stereo_camera/right/image'],
+                 dst=['realsense_splitter_node/output/infra_2'],
                  condition=setup_for_realsense),
+        SetRemap(src=['visual_slam/imu'],
+                 dst=['imu'],
+                 condition=setup_for_realsense),
+
 
         #################################################
         ######### ODOMETRY FLATTENER NODE SETUP #########
@@ -159,12 +176,12 @@ def generate_launch_description():
         SetParameter(name='input_parent_frame_id', value=odometry_frame_before_flattening_name),
         SetParameter(name='input_child_frame_id', value='base_link',
                      condition=setup_for_isaac_sim),
-        SetParameter(name='input_child_frame_id', value='camera_link',
+        SetParameter(name='input_child_frame_id', value='base_link',
                      condition=setup_for_realsense),
         SetParameter(name='output_parent_frame_id', value=LaunchConfiguration('output_odom_frame_name')),
         SetParameter(name='output_child_frame_id', value='base_link',
                      condition=setup_for_isaac_sim),
-        SetParameter(name='output_child_frame_id', value='camera_link',
+        SetParameter(name='output_child_frame_id', value='base_link',
                      condition=setup_for_realsense),
         SetParameter(name='invert_output_transform', value=True),
 
