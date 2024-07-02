@@ -86,7 +86,7 @@ def generate_launch_description():
     
     # Realsene param set
     reset_rs_param = ExecuteProcess(
-        cmd=['ros2', 'param', 'set', LaunchConfiguration('camera_name'), 'depth_module.emitter_on_off', 'true'],
+        cmd=['while', 'true;', 'do', 'ros2', 'param', 'set', LaunchConfiguration('camera_name'), 'depth_module.emitter_on_off', 'true;', 'sleep', '5;', 'done'],
         shell=True, output='screen',
         condition=IfCondition(LaunchConfiguration('reset_emitter_on_off')))
 
@@ -133,4 +133,5 @@ def generate_launch_description():
         nvblox_launch,
         bag_play,
         rviz_launch,
-        static_tf])
+        static_tf,
+        reset_rs_param])
