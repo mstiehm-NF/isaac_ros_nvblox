@@ -71,7 +71,7 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         ## Arguments: x, y, z, qx, qy, qz, qw, frame_id, child_frame_id
-        arguments=['0', '0', '0.85725', '0', '0', '0', 'base_link', 'camera_link'],
+        arguments=['0', '0', '1.15', '0', '0', '0', 'base_link', 'camera_link'],
         output='screen')    
 
     # Realsense

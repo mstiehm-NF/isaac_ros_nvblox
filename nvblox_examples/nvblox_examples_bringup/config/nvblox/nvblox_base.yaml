@@ -10,9 +10,9 @@
     compute_esdf: false
     esdf_update_rate_hz: 10.0
     esdf_2d: true
-    publish_esdf_distance_slice: false
+    publish_esdf_distance_slice: true
     esdf_slice_height: 0.4
-    esdf_2d_min_height: 0.025
+    esdf_2d_min_height: 0.1
     esdf_2d_max_height: 0.7
     # mesh settings
     compute_mesh: false
@@ -30,7 +30,7 @@
     lidar_height: 31
     use_non_equal_vertical_fov_lidar_params: false
     # static occupancy
-    static_occupancy_publication_rate_hz: 2.0
+    static_occupancy_publication_rate_hz: 10.0
     # dynamic occupancy
     dynamic_occupancy_decay_rate_hz: 10.0
     # Input queues

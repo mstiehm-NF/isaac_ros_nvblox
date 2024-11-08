@@ -99,7 +99,7 @@ def generate_launch_description():
         SetParameter(name='accel_random_walk', value=0.003),
         SetParameter(name='calibration_frequency', value=200.0),
         SetParameter(name='img_jitter_threshold_ms', value=40.00),
-        SetParameter(name='path_max_size', value=100000),
+        SetParameter(name='path_max_size', value=10000),
         SetParameter(name='force_planar_mode', value=True),
         # If the odometry flattener is running, the vslam output odom_frame
         # can not be set to the output_odom_frame.
