@@ -21,16 +21,20 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_msgs/msg/tf_message.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <tf2_eigen/tf2_eigen.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 
 namespace nvblox {
 
 class OdometryFlattenerNode : public rclcpp::Node {
  public:
-  OdometryFlattenerNode(const rclcpp::NodeOptions & options);
-
-  void tfMessageCallback(tf2_msgs::msg::TFMessage::ConstSharedPtr msg);
+  explicit OdometryFlattenerNode(const rclcpp::NodeOptions & options);
 
  private:
+  void tfMessageCallback(tf2_msgs::msg::TFMessage::ConstSharedPtr msg);
+  void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
+
   // Input frame names
   std::string input_parent_frame_id_ = "odom";
   std::string input_child_frame_id_ = "base_link";
@@ -45,11 +49,13 @@ class OdometryFlattenerNode : public rclcpp::Node {
 
   // Subscribers
   rclcpp::Subscription<tf2_msgs::msg::TFMessage>::SharedPtr tf2_message_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
 
   // Publishers
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr flattened_odom_pub_;
 };
 
 }  // namespace nvblox
 
-#endif // ODOMETRY_FLATTENER__ODOMETRY_FLATTENER_NODE_HPP_
+#endif  // ODOMETRY_FLATTENER__ODOMETRY_FLATTENER_NODE_HPP_

@@ -27,6 +27,7 @@ find_package(rclcpp REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(tf2_eigen REQUIRED)
+find_package(nav_msgs REQUIRED)
 
 #############
 # LIBRARIES #
@@ -42,6 +43,7 @@ ament_target_dependencies(odometry_flattener_component
   tf2_ros
   tf2_msgs
   tf2_eigen
+  nav_msgs
 )
 target_include_directories(odometry_flattener_component PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -102,6 +104,7 @@ ament_export_dependencies(
   tf2_ros
   tf2_msgs
   tf2_eigen
+  nav_msgs
 )
 
 ament_package()

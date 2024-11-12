@@ -2,23 +2,8 @@
 // Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// SPDX-License-Identifier: Apache-2.0
 
 #include "odometry_flattener/odometry_flattener_node.h"
-
-#include <tf2_eigen/tf2_eigen.hpp>
-
 namespace nvblox {
 
 OdometryFlattenerNode::OdometryFlattenerNode(const rclcpp::NodeOptions & options)
@@ -46,6 +31,16 @@ OdometryFlattenerNode::OdometryFlattenerNode(const rclcpp::NodeOptions & options
 
   // Initialize the transform broadcaster
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+
+  // Subscribe to odometry
+  odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      "visual_slam/tracking/odometry", qos_history_depth,
+      std::bind(&OdometryFlattenerNode::odometryCallback, this,
+                std::placeholders::_1));
+
+  // Initialize the odometry publisher
+  flattened_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
+      "flattened_odom", qos_history_depth);
 }
 
 void OdometryFlattenerNode::tfMessageCallback(
@@ -113,8 +108,68 @@ void OdometryFlattenerNode::tfMessageCallback(
   tf_broadcaster_->sendTransform(msg_flattened);
 }
 
-}  // namespace nvblox
+void OdometryFlattenerNode::odometryCallback(
+    const nav_msgs::msg::Odometry::SharedPtr msg) {
+  bool input_transform_inverted = false;
 
+  if (msg->header.frame_id == input_parent_frame_id_ &&
+      msg->child_frame_id == input_child_frame_id_) {
+    input_transform_inverted = false;
+  } else if (msg->header.frame_id == input_child_frame_id_ &&
+             msg->child_frame_id == input_parent_frame_id_) {
+    input_transform_inverted = true;
+  } else {
+    // Not the frames we are interested in
+    return;
+  }
+
+  // Extract the pose
+  const geometry_msgs::msg::Pose& pose_msg = msg->pose.pose;
+
+  // Convert to Eigen Isometry3d
+  Eigen::Isometry3d T;
+  tf2::fromMsg(pose_msg, T);
+
+  if (input_transform_inverted) {
+    T = T.inverse();
+  }
+
+  // Flatten the transform
+  const auto q = Eigen::Quaterniond(T.rotation());
+  const auto q_flattened =
+      Eigen::Quaterniond(q.w(), 0.0, 0.0, q.z()).normalized();
+  const auto t_flattened = Eigen::Vector3d(
+      T.translation().x(), T.translation().y(), 0.0);
+  Eigen::Isometry3d T_flattened = Eigen::Isometry3d::Identity();
+  T_flattened.prerotate(q_flattened);
+  T_flattened.pretranslate(t_flattened);
+
+  // Invert if requested
+  if (invert_output_transform_) {
+    T_flattened = T_flattened.inverse();
+  }
+
+  // Convert back to Pose message
+  geometry_msgs::msg::Pose flattened_pose_msg = tf2::toMsg(T_flattened);
+
+  // Create new odometry message
+  nav_msgs::msg::Odometry flattened_odom_msg = *msg;  // Copy original message
+  flattened_odom_msg.pose.pose = flattened_pose_msg;
+
+  // Set child_frame_id and frame_id
+  if (invert_output_transform_) {
+    flattened_odom_msg.child_frame_id = output_parent_frame_id_;
+    flattened_odom_msg.header.frame_id = output_child_frame_id_;
+  } else {
+    flattened_odom_msg.child_frame_id = output_child_frame_id_;
+    flattened_odom_msg.header.frame_id = output_parent_frame_id_;
+  }
+
+  // Publish the flattened odometry
+  flattened_odom_pub_->publish(flattened_odom_msg);
+}
+
+}  // namespace nvblox
 
 // Register the node as a component
 #include "rclcpp_components/register_node_macro.hpp"
