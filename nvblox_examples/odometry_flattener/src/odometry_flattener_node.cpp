@@ -109,19 +109,7 @@ void OdometryFlattenerNode::tfMessageCallback(
 }
 
 void OdometryFlattenerNode::odometryCallback(
-    const nav_msgs::msg::Odometry::SharedPtr msg) {
-  bool input_transform_inverted = false;
-
-  if (msg->header.frame_id == input_parent_frame_id_ &&
-      msg->child_frame_id == input_child_frame_id_) {
-    input_transform_inverted = false;
-  } else if (msg->header.frame_id == input_child_frame_id_ &&
-             msg->child_frame_id == input_parent_frame_id_) {
-    input_transform_inverted = true;
-  } else {
-    // Not the frames we are interested in
-    return;
-  }
+  const nav_msgs::msg::Odometry::SharedPtr msg) {
 
   // Extract the pose
   const geometry_msgs::msg::Pose& pose_msg = msg->pose.pose;
@@ -130,40 +118,41 @@ void OdometryFlattenerNode::odometryCallback(
   Eigen::Isometry3d T;
   tf2::fromMsg(pose_msg, T);
 
-  if (input_transform_inverted) {
-    T = T.inverse();
-  }
-
   // Flatten the transform
   const auto q = Eigen::Quaterniond(T.rotation());
   const auto q_flattened =
-      Eigen::Quaterniond(q.w(), 0.0, 0.0, q.z()).normalized();
+    Eigen::Quaterniond(q.w(), 0.0, 0.0, q.z()).normalized();
   const auto t_flattened = Eigen::Vector3d(
-      T.translation().x(), T.translation().y(), 0.0);
+    T.translation().x(), T.translation().y(), 0.0);
   Eigen::Isometry3d T_flattened = Eigen::Isometry3d::Identity();
   T_flattened.prerotate(q_flattened);
   T_flattened.pretranslate(t_flattened);
 
-  // Invert if requested
-  if (invert_output_transform_) {
-    T_flattened = T_flattened.inverse();
-  }
-
   // Convert back to Pose message
   geometry_msgs::msg::Pose flattened_pose_msg = tf2::toMsg(T_flattened);
+
+  // Flatten the linear velocity
+  geometry_msgs::msg::Vector3 flattened_linear_velocity = msg->twist.twist.linear;
+  flattened_linear_velocity.z = 0.0;
+
+  // Flatten the angular velocity
+  geometry_msgs::msg::Vector3 flattened_angular_velocity = msg->twist.twist.angular;
+  flattened_angular_velocity.x = 0.0;
+  flattened_angular_velocity.y = 0.0;
 
   // Create new odometry message
   nav_msgs::msg::Odometry flattened_odom_msg = *msg;  // Copy original message
   flattened_odom_msg.pose.pose = flattened_pose_msg;
+  flattened_odom_msg.twist.twist.linear = flattened_linear_velocity;
+  flattened_odom_msg.twist.twist.angular = flattened_angular_velocity;
 
   // Set child_frame_id and frame_id
-  if (invert_output_transform_) {
-    flattened_odom_msg.child_frame_id = output_parent_frame_id_;
-    flattened_odom_msg.header.frame_id = output_child_frame_id_;
-  } else {
-    flattened_odom_msg.child_frame_id = output_child_frame_id_;
-    flattened_odom_msg.header.frame_id = output_parent_frame_id_;
-  }
+  flattened_odom_msg.child_frame_id = output_child_frame_id_;
+  flattened_odom_msg.header.frame_id = output_parent_frame_id_;
+
+  // Copy over the covariance matrices
+  flattened_odom_msg.pose.covariance = msg->pose.covariance;
+  flattened_odom_msg.twist.covariance = msg->twist.covariance;
 
   // Publish the flattened odometry
   flattened_odom_pub_->publish(flattened_odom_msg);
