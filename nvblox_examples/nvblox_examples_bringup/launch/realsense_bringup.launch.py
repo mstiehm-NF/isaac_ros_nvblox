@@ -1,21 +1,5 @@
-# SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# SPDX-License-Identifier: Apache-2.0
-
 import os
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -25,10 +9,20 @@ from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
+def load_camera_pose(file_path):
+    with open(file_path, 'r') as file:
+        data = yaml.safe_load(file)
+    return data
 
 def generate_launch_description():
-
     bringup_dir = get_package_share_directory('nvblox_examples_bringup')
+
+    # Load camera pose from YAML file
+    camera_pose_file = '/usr/calibration/camera_pose.yaml'
+    camera_pose = load_camera_pose(camera_pose_file)
+
+    x, y, z = camera_pose['translation']['x'], camera_pose['translation']['y'], camera_pose['translation']['z']
+    roll, pitch, yaw = camera_pose['rotation']['roll'], camera_pose['rotation']['pitch'], camera_pose['rotation']['yaw']
 
     # Launch Arguments
     launch_args = [
@@ -66,12 +60,12 @@ def generate_launch_description():
         executable='component_container_mt',
         output='screen')
     
-    #Static transform publisher
+    # Static transform publisher
     static_tf = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        ## Arguments: x, y, z, qx, qy, qz, qw, frame_id, child_frame_id
-        arguments=['1.870', '0', '.591', '0', '0', '0', 'base_link', 'camera_link'],
+        ## Arguments: x, y, z, r, p, y, frame_id, child_frame_id
+        arguments=[str(x), str(y), str(z), str(roll), str(pitch), str(yaw), 'base_link', 'camera_link'],
         output='screen')    
 
     # Realsense
@@ -84,7 +78,7 @@ def generate_launch_description():
             'component_container_name': shared_container_name}.items(),
         condition=UnlessCondition(LaunchConfiguration('from_bag')))
     
-    # Realsene param set
+    # Realsense param set
     reset_rs_param = ExecuteProcess(
         cmd=['while', 'true;', 'do', 'ros2', 'param', 'set', LaunchConfiguration('camera_name'), 'depth_module.emitter_on_off', 'true;', 'sleep', '5;', 'done'],
         shell=True, output='screen',

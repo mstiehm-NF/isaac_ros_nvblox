@@ -52,7 +52,7 @@
       do_depth_preprocessing: false
       depth_preprocessing_num_dilations: 3
       # projective integrator (tsdf/color/occupancy)
-      projective_integrator_max_integration_distance_m: 7.0
+      projective_integrator_max_integration_distance_m: 5.0
       lidar_projective_integrator_max_integration_distance_m: 10.0
       projective_integrator_truncation_distance_vox: 4.0
       weighting_mode: "inverse_square_dropoff"
