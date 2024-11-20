@@ -18,7 +18,7 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('nvblox_examples_bringup')
 
     # Load camera pose from YAML file
-    camera_pose_file = '/usr/calibration/camera_pose.yaml'
+    camera_pose_file = '/usr/config/camera_pose.yaml'
     camera_pose = load_camera_pose(camera_pose_file)
 
     x, y, z = camera_pose['translation']['x'], camera_pose['translation']['y'], camera_pose['translation']['z']
