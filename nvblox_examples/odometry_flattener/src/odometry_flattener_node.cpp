@@ -22,6 +22,12 @@ OdometryFlattenerNode::OdometryFlattenerNode(const rclcpp::NodeOptions & options
   invert_output_transform_ = declare_parameter<bool>(
       "invert_output_transform", invert_output_transform_);
 
+  // Declare covariance parameters
+  position_variance_ = declare_parameter<double>("position_variance", 0.05);  // Variance in position (m^2)
+  orientation_variance_ = declare_parameter<double>("orientation_variance", 0.02);  // Variance in orientation (rad^2)
+  linear_velocity_variance_ = declare_parameter<double>("linear_velocity_variance", 0.05);  // Variance in linear velocity (m^2/s^2)
+  angular_velocity_variance_ = declare_parameter<double>("angular_velocity_variance", 0.02);  // Variance in angular velocity (rad^2/s^2)
+
   // Subscribe to tf
   constexpr size_t qos_history_depth = 10;
   tf2_message_sub_ = this->create_subscription<tf2_msgs::msg::TFMessage>(
@@ -150,12 +156,53 @@ void OdometryFlattenerNode::odometryCallback(
   flattened_odom_msg.child_frame_id = output_child_frame_id_;
   flattened_odom_msg.header.frame_id = output_parent_frame_id_;
 
-  // Copy over the covariance matrices
-  flattened_odom_msg.pose.covariance = msg->pose.covariance;
-  flattened_odom_msg.twist.covariance = msg->twist.covariance;
+  // Update the covariance matrices with realistic values
+  setCovarianceMatrices(flattened_odom_msg);
 
   // Publish the flattened odometry
   flattened_odom_pub_->publish(flattened_odom_msg);
+}
+
+void OdometryFlattenerNode::setCovarianceMatrices(nav_msgs::msg::Odometry& odom_msg) {
+  // Initialize pose covariance matrix with zeros
+  std::array<double, 36> pose_covariance = {0.0};
+
+  // Set variances for X and Y positions
+  pose_covariance[0] = position_variance_;  // Variance in X
+  pose_covariance[7] = position_variance_;  // Variance in Y
+
+  // Set large variance for Z position (not used)
+  pose_covariance[14] = 1e6;  // Variance in Z
+
+  // Set large variances for Roll and Pitch (not used)
+  pose_covariance[21] = 1e6;  // Variance in Roll
+  pose_covariance[28] = 1e6;  // Variance in Pitch
+
+  // Set variance for Yaw
+  pose_covariance[35] = orientation_variance_;  // Variance in Yaw
+
+  // Assign the updated pose covariance to the odometry message
+  odom_msg.pose.covariance = pose_covariance;
+
+  // Initialize twist covariance matrix with zeros
+  std::array<double, 36> twist_covariance = {0.0};
+
+  // Set variance for linear velocity X and Y
+  twist_covariance[0] = linear_velocity_variance_;  // Variance in linear velocity X
+  twist_covariance[7] = linear_velocity_variance_;  // Variance in linear velocity Y
+
+  // Set large variance for linear velocity Z (not used)
+  twist_covariance[14] = 1e6;  // Variance in linear velocity Z
+
+  // Set large variances for angular velocities Roll and Pitch (not used)
+  twist_covariance[21] = 1e6;  // Variance in angular velocity X
+  twist_covariance[28] = 1e6;  // Variance in angular velocity Y
+
+  // Set variance for angular velocity Yaw
+  twist_covariance[35] = angular_velocity_variance_;  // Variance in angular velocity Z
+
+  // Assign the updated twist covariance to the odometry message
+  odom_msg.twist.covariance = twist_covariance;
 }
 
 }  // namespace nvblox

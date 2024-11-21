@@ -29,12 +29,17 @@ namespace nvblox {
 
 class OdometryFlattenerNode : public rclcpp::Node {
  public:
-  explicit OdometryFlattenerNode(const rclcpp::NodeOptions & options);
+  explicit OdometryFlattenerNode(const rclcpp::NodeOptions& options);
 
  private:
+  // Callback functions
   void tfMessageCallback(tf2_msgs::msg::TFMessage::ConstSharedPtr msg);
   void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
 
+  // Helper function to set covariance matrices
+  void setCovarianceMatrices(nav_msgs::msg::Odometry& odom_msg);
+
+  // Parameters
   // Input frame names
   std::string input_parent_frame_id_ = "odom";
   std::string input_child_frame_id_ = "base_link";
@@ -43,9 +48,14 @@ class OdometryFlattenerNode : public rclcpp::Node {
   std::string output_parent_frame_id_ = "odom";
   std::string output_child_frame_id_ = "base_link_flattened";
 
-  // Whether or not to invert the output transform. This is often necessary to
-  // ensure each node in the TF tree has a single parent.
+  // Inversion flag
   bool invert_output_transform_ = false;
+
+  // Covariance parameters
+  double position_variance_ = 0.05;          // Variance in position (m^2)
+  double orientation_variance_ = 0.02;       // Variance in orientation (rad^2)
+  double linear_velocity_variance_ = 0.05;   // Variance in linear velocity (m^2/s^2)
+  double angular_velocity_variance_ = 0.02;  // Variance in angular velocity (rad^2/s^2)
 
   // Subscribers
   rclcpp::Subscription<tf2_msgs::msg::TFMessage>::SharedPtr tf2_message_sub_;
