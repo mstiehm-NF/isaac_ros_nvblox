@@ -92,7 +92,7 @@ def generate_launch_description():
         SetParameter(name='publish_map_to_odom_tf', value=False),
         SetParameter(name='invert_odom_to_base_tf', value=True),
         SetParameter(name='input_imu_frame', value='camera_gyro_optical_frame'),
-        SetParameter(name='enable_imu_fusion', value=True),
+        SetParameter(name='enable_imu_fusion', value=False),
         SetParameter(name='gyro_noise_density', value=0.000244),
         SetParameter(name='gyro_random_walk', value=0.000019393),
         SetParameter(name='accel_noise_density', value=0.001862),
