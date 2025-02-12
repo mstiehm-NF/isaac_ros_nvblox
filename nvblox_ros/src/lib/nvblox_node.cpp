@@ -953,7 +953,9 @@ void NvbloxNode::publishOccupancyPointcloud()
     layer_converter_.pointcloudMsgFromLayer(static_mapper_->occupancy_layer(), &pointcloud_msg);
     pointcloud_msg.header.frame_id = global_frame_;
     pointcloud_msg.header.stamp = get_clock()->now();
-    static_occupancy_publisher_->publish(pointcloud_msg);
+    if (!pointcloud_msg.data.empty()) {
+      static_occupancy_publisher_->publish(pointcloud_msg);
+    }
   }
 }
 
