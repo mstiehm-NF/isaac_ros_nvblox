@@ -97,7 +97,7 @@ def generate_launch_description():
         SetParameter(name='gyro_random_walk', value=0.000019393),
         SetParameter(name='accel_noise_density', value=0.001862),
         SetParameter(name='accel_random_walk', value=0.003),
-        SetParameter(name='calibration_frequency', value=200.0),
+        SetParameter(name='calibration_frequency', value=100.0),
         SetParameter(name='img_jitter_threshold_ms', value=40.00),
         SetParameter(name='path_max_size', value=10000),
         SetParameter(name='force_planar_mode', value=True),
