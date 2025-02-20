@@ -36,7 +36,7 @@ def generate_launch_description():
         'bag_path', default_value='rosbag2*',
         description='Path of the bag (only used if from_bag == True)'),
         DeclareLaunchArgument(
-        'flatten_odometry_to_2d', default_value='True',
+        'flatten_odometry_to_2d', default_value='False',
         description='Whether to flatten the odometry to 2D (camera only moving on XY-plane).'),
         DeclareLaunchArgument(
         'namespace', default_value='',
