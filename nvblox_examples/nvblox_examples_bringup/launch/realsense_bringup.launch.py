@@ -7,7 +7,7 @@ from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, TextSubstitution
 
 def load_camera_pose(file_path):
     with open(file_path, 'r') as file:
@@ -79,10 +79,24 @@ def generate_launch_description():
         condition=UnlessCondition(LaunchConfiguration('from_bag')))
     
     # Realsense param set
+    camera_name = LaunchConfiguration('camera_name')
     reset_rs_param = ExecuteProcess(
-        cmd=['while', 'true;', 'do', 'ros2', 'param', 'set', LaunchConfiguration('camera_name'), 'depth_module.emitter_on_off', 'true;', 'sleep', '5;', 'done'],
-        shell=True, output='screen',
-        condition=IfCondition(LaunchConfiguration('reset_emitter_on_off')))
+        cmd=[
+            'bash', '-c',
+            # Using $1 for the camera name; note the dummy "_" so $1 gets set properly.
+            'while ! ros2 param set "$1" depth_module.emitter_on_off true | grep -q "Set parameter successful"; do '
+            'echo "Attempting to set depth_module.emitter_on_off true on camera: $1"; '
+            'echo "Parameter not set yet. Retrying in 5 seconds..."; '
+            'sleep 5; '
+            'done; '
+            'echo "Parameter set successfully for $1."',
+            '_',  # dummy $0 so that $1 becomes the camera_name
+            camera_name
+        ],
+        shell=False,
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('reset_emitter_on_off'))
+    )
 
     # Vslam
     vslam_launch = IncludeLaunchDescription(

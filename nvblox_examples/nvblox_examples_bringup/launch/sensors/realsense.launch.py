@@ -43,6 +43,7 @@ def generate_launch_description():
         package='rclcpp_components',
         executable='component_container_mt',
         output='screen',
+        # prefix='chrt -r 51 taskset -c 3,4,5',
         condition=UnlessCondition(attach_to_shared_component_container_arg)
     )
 
