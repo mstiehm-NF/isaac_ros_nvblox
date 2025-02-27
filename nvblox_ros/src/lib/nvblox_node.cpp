@@ -392,9 +392,13 @@ void NvbloxNode::depthImageCallback(
   const sensor_msgs::msg::Image::ConstSharedPtr & depth_img_ptr,
   const sensor_msgs::msg::CameraInfo::ConstSharedPtr & camera_info_msg)
 {
-  printMessageArrivalStatistics(
-    *depth_img_ptr, "Depth Statistics",
-    &depth_frame_statistics_);
+  static rclcpp::Time last_print_time = get_clock()->now();
+  if ((get_clock()->now() - last_print_time).seconds() >= 60.0) {
+    printMessageArrivalStatistics(
+      *depth_img_ptr, "Depth Statistics",
+      &depth_frame_statistics_);
+    last_print_time = get_clock()->now();
+  }
   pushMessageOntoQueue(
     {depth_img_ptr, camera_info_msg}, &depth_image_queue_,
     &depth_queue_mutex_);
