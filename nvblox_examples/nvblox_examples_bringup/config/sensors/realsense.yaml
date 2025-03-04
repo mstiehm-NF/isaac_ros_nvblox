@@ -45,7 +45,7 @@ accel_fps: 100
 unite_imu_method: 2
 
 pointcloud:
-  enable: true
+  enable: false
 
 pointcloud_texture_index: 0
 pointcloud_texture_stream: RS2_STREAM_ANY
