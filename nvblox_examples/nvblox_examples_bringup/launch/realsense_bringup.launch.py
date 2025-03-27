@@ -81,15 +81,16 @@ def generate_launch_description():
     # Realsense param set
     camera_name = LaunchConfiguration('camera_name')
     reset_rs_param = ExecuteProcess(
-        cmd=[
+        cmd = [
             'bash', '-c',
-            # Using $1 for the camera name; note the dummy "_" so $1 gets set properly.
-            'while ! ros2 param set "$1" depth_module.emitter_on_off true | grep -q "Set parameter successful"; do '
-            'echo "Attempting to set depth_module.emitter_on_off true on camera: $1"; '
-            'echo "Parameter not set yet. Retrying in 5 seconds..."; '
-            'sleep 5; '
-            'done; '
-            'echo "Parameter set successfully for $1."',
+            'for i in 1 2; do '
+            '  while ! ros2 param set "$1" depth_module.emitter_on_off true | grep -q "Set parameter successful"; do '
+            '    echo "Attempting to set depth_module.emitter_on_off true on camera: $1 (iteration $i)"; '
+            '    echo "Parameter not set yet. Retrying in 5 seconds..."; '
+            '    sleep 5; '
+            '  done; '
+            '  echo "Parameter set successfully for $1 (iteration $i)."; '
+            'done',
             '_',  # dummy $0 so that $1 becomes the camera_name
             camera_name
         ],
