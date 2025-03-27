@@ -7,8 +7,8 @@
     mapping_type: "static_occupancy"  # ["static_tsdf", "static_occupancy"]
     connected_mask_component_size_threshold: 2000
     # esdf settings
-    compute_esdf: false
-    esdf_update_rate_hz: 10.0
+    compute_esdf: true
+    esdf_update_rate_hz: 5.0
     esdf_2d: true
     publish_esdf_distance_slice: true
     esdf_slice_height: 0.3
@@ -39,7 +39,7 @@
     # Map clearing settings
     map_clearing_radius_m: 3.0 # no map clearing if < 0.0
     map_clearing_frame_id: "base_link"
-    clear_outside_radius_rate_hz: 2.0
+    clear_outside_radius_rate_hz: 5.0
     # QoS settings
     depth_qos: "SYSTEM_DEFAULT"
     color_qos: "SYSTEM_DEFAULT"
