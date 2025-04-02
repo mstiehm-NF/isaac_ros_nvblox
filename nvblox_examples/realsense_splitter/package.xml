@@ -38,6 +38,8 @@
   <depend>message_filters</depend>
   <depend>realsense2_camera_msgs</depend>
   <depend>nvblox_ros_common</depend>
+  <build_depend>nlohmann_json</build_depend>
+  <exec_depend>nlohmann_json</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

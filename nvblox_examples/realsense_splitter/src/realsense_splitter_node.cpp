@@ -16,7 +16,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "realsense_splitter/realsense_splitter_node.hpp"
-
 #include <nvblox_ros_common/qos.hpp>
 
 namespace nvblox
@@ -34,7 +33,7 @@ RealsenseSplitterNode::RealsenseSplitterNode(const rclcpp::NodeOptions & options
   std::string output_qos_str =
     declare_parameter<std::string>("output_qos", kDefaultQoS);
 
-  // Subscribe to synchronized depth + cam_info topics
+  // Subscribe to synchronized topics
   const auto input_qos = parseQosString(input_qos_str);
   infra_1_sub_.subscribe(this, "input/infra_1", input_qos);
   infra_1_metadata_sub_.subscribe(this, "input/infra_1_metadata", input_qos);
@@ -96,28 +95,16 @@ RealsenseSplitterNode::RealsenseSplitterNode(const rclcpp::NodeOptions & options
 int RealsenseSplitterNode::getEmitterModeFromMetadataMsg(
   const realsense2_camera_msgs::msg::Metadata::ConstSharedPtr & metadata)
 {
-  // Field name in json metadata
-  constexpr char frame_emitter_mode_str[] = "\"frame_emitter_mode\":";
-  constexpr size_t field_name_length =
-    sizeof(frame_emitter_mode_str) / sizeof(frame_emitter_mode_str[0]);
-  // Find the field
-  const size_t frame_emitter_mode_start_location =
-    metadata->json_data.find(frame_emitter_mode_str);
-  // If the emitter mode is not found, return unknown and warn the user.
-  if (frame_emitter_mode_start_location == metadata->json_data.npos) {
-    constexpr int kPublishPeriodMs = 1000;
-    auto & clk = *get_clock();
-    RCLCPP_WARN_THROTTLE(
-      get_logger(), clk, kPublishPeriodMs,
-      "Realsense frame metadata did not contain \"frame_emitter_mode\". Splitter will not work.");
+  try {
+    // Parse the JSON metadata robustly
+    auto json = nlohmann::json::parse(metadata->json_data);
+    RCLCPP_DEBUG(get_logger(), "Parsed JSON: %s", json.dump().c_str());
+    // Extract the emitter mode as an integer
+    return json.at("frame_emitter_mode").get<int>();
+  } catch (const std::exception & e) {
+    RCLCPP_WARN(get_logger(), "Failed to parse emitter mode: %s", e.what());
     return static_cast<int>(EmitterMode::kUnknown);
   }
-  // If it is found, parse the field.
-  const size_t field_location = frame_emitter_mode_start_location + field_name_length - 1;
-  const int emitter_mode =
-    static_cast<int>(metadata->json_data[field_location]) -
-    static_cast<int>('0');
-  return emitter_mode;
 }
 
 template<typename MessageType>
@@ -127,8 +114,9 @@ void RealsenseSplitterNode::republishIfEmitterMode(
   const EmitterMode emitter_mode,
   typename rclcpp::Publisher<MessageType>::SharedPtr & publisher)
 {
-  if (getEmitterModeFromMetadataMsg(metadata) ==
-    static_cast<int>(emitter_mode))
+  int mode = getEmitterModeFromMetadataMsg(metadata);
+  RCLCPP_DEBUG(get_logger(), "Republishing check: expected mode %d, got %d", static_cast<int>(emitter_mode), mode);
+  if (mode == static_cast<int>(emitter_mode))
   {
     publisher->publish(*image);
   }
@@ -155,8 +143,7 @@ void RealsenseSplitterNode::depthCallback(
   realsense2_camera_msgs::msg::Metadata::ConstSharedPtr metadata)
 {
   republishIfEmitterMode<sensor_msgs::msg::Image>(
-    image, metadata,
-    EmitterMode::kOn, depth_pub_);
+    image, metadata, EmitterMode::kOn, depth_pub_);
 }
 
 void RealsenseSplitterNode::pointcloudCallback(

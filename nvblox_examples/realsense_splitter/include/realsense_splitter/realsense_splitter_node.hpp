@@ -22,7 +22,7 @@
 #include <message_filters/sync_policies/exact_time.h>
 
 #include <memory>
-
+#include <nlohmann/json.hpp>  // Added for robust JSON parsing
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -60,11 +60,13 @@ public:
     realsense2_camera_msgs::msg::Metadata::ConstSharedPtr metadata);
 
 private:
-  // Extract the emitter metadata mode
+  // Extract the emitter metadata mode.
+  // NOTE: The implementation now uses robust JSON parsing via nlohmann::json.
   int getEmitterModeFromMetadataMsg(
     const realsense2_camera_msgs::msg::Metadata::ConstSharedPtr & metadata);
 
-  // Republish the image if the emitter is off
+  // Republish the image if the emitter mode matches.
+  // NOTE: Added debug logging in the implementation for improved diagnostics.
   template<typename MessageType>
   void republishIfEmitterMode(
     const typename MessageType::ConstSharedPtr & image,
@@ -72,7 +74,7 @@ private:
     const EmitterMode emitter_mode,
     typename rclcpp::Publisher<MessageType>::SharedPtr & publisher);
 
-  // Time Sync
+  // Time Sync policies for image and pointcloud messages.
   typedef message_filters::sync_policies::ExactTime<
       sensor_msgs::msg::Image, realsense2_camera_msgs::msg::Metadata>
     image_time_policy_t;
@@ -80,7 +82,7 @@ private:
       sensor_msgs::msg::PointCloud2, realsense2_camera_msgs::msg::Metadata>
     pointcloud_time_policy_t;
 
-  // Image subscribers
+  // Image subscribers for infrared and depth streams along with metadata.
   std::shared_ptr<message_filters::Synchronizer<image_time_policy_t>>
   timesync_infra_1_;
   message_filters::Subscriber<sensor_msgs::msg::Image> infra_1_sub_;
@@ -102,7 +104,7 @@ private:
   message_filters::Subscriber<realsense2_camera_msgs::msg::Metadata>
   pointcloud_metadata_sub_;
 
-  // Image publisher
+  // Publishers for the respective topics.
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr infra_1_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr infra_2_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_pub_;

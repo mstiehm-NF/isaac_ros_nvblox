@@ -31,7 +31,7 @@ find_package(message_filters REQUIRED)
 find_package(realsense2_camera_msgs REQUIRED)
 find_package(nvblox_ros_common REQUIRED)
 find_package(CUDAToolkit REQUIRED)
-
+find_package(nlohmann_json REQUIRED)
 
 #############
 # LIBRARIES #
@@ -63,7 +63,7 @@ set(node_plugins "${node_plugins}nvblox::RealsenseSplitterNode;$<TARGET_FILE:rea
 add_executable(realsense_splitter_node
   src/realsense_splitter_node_main.cpp
 )
-target_link_libraries(realsense_splitter_node realsense_splitter_component)
+target_link_libraries(realsense_splitter_node realsense_splitter_component nlohmann_json::nlohmann_json)
 
 ###########
 # INSTALL #

@@ -144,19 +144,19 @@ void NvbloxNode::printMessageArrivalStatistics(
   libstatistics_collector::topic_statistics_collector::
   ReceivedMessagePeriodCollector<MessageType> * statistics_collector)
 {
-  // Calculate statistics
-  statistics_collector->OnMessageReceived(
-    message,
-    get_clock()->now().nanoseconds());
-  // Print statistics
-  constexpr int kPublishPeriodMs = 10000;
-  auto & clk = *get_clock();
-  RCLCPP_INFO_STREAM_THROTTLE(
-    get_logger(), clk, kPublishPeriodMs,
-    output_prefix << ": \n" <<
-      libstatistics_collector::moving_average_statistics::
-      StatisticsDataToString(
-      statistics_collector->GetStatisticsResults()));
+  // // Calculate statistics
+  // statistics_collector->OnMessageReceived(
+  //   message,
+  //   get_clock()->now().nanoseconds());
+  // // Print statistics
+  // constexpr int kPublishPeriodMs = 10000;
+  // auto & clk = *get_clock();
+  // RCLCPP_INFO_STREAM_THROTTLE(
+  //   get_logger(), clk, kPublishPeriodMs,
+  //   output_prefix << ": \n" <<
+  //     libstatistics_collector::moving_average_statistics::
+  //     StatisticsDataToString(
+  //     statistics_collector->GetStatisticsResults()));
 }
 
 }  // namespace nvblox
