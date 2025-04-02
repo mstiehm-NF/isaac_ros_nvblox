@@ -31,6 +31,9 @@ def generate_launch_description():
         description='Whether to start RVIZ'),
         DeclareLaunchArgument(
         'from_bag', default_value='False',
+        description='Whether to run realsense node'),
+        DeclareLaunchArgument(
+        'launch_realsense', default_value='False',
         description='Whether to run from a bag or live realsense data'),
         DeclareLaunchArgument(
         'bag_path', default_value='rosbag2*',
@@ -42,7 +45,7 @@ def generate_launch_description():
         'namespace', default_value='',
         description='Namespace for all nodes and topics'),
         DeclareLaunchArgument(
-        'reset_emitter_on_off', default_value='True',
+        'reset_emitter_on_off', default_value='False',
         description='Set the emitter on/off parameter'),
         DeclareLaunchArgument(
         'camera_name', default_value=[LaunchConfiguration('namespace'), '/camera'])
@@ -76,7 +79,7 @@ def generate_launch_description():
             'namespace': namespace,
             'attach_to_shared_component_container': 'True',
             'component_container_name': shared_container_name}.items(),
-        condition=UnlessCondition(LaunchConfiguration('from_bag')))
+        condition=IfCondition(LaunchConfiguration('launch_realsense')))
     
     # Realsense param set
     camera_name = LaunchConfiguration('camera_name')
