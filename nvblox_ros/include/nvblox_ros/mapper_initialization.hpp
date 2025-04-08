@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-// Copyright (c) 2022-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,19 +30,24 @@
 namespace nvblox
 {
 
+EsdfMode esdf_mode_from_string(const std::string & esdf_mode_str, rclcpp::Node * node);
+
 MappingType mapping_type_from_string(
   const std::string & mapping_type_str, rclcpp::Node * node);
 
 void declareMapperParameters(const std::string & mapper_name, rclcpp::Node * node);
 
+void declareMultiMapperParameters(rclcpp::Node * node);
+
 template<typename T>
-void set_mapper_parameter(
-  const std::string & mapper_name,
+void set_parameter(
+  const std::string & prefix_name,
   const std::string & parameter_name,
   std::function<void(T)> parameter_setter,
   rclcpp::Node * node);
 
 MapperParams getMapperParamsFromROS(const std::string & mapper_name, rclcpp::Node * node);
+MultiMapperParams getMultiMapperParamsFromROS(rclcpp::Node * node);
 
 }  // namespace nvblox
 

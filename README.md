@@ -6,7 +6,7 @@ Nvblox ROS 2 integration for local 3D scene reconstruction and mapping.
 
 ## Overview
 
-[Isaac ROS Nvblox](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_nvblox) contains ROS 2 packages for 3D reconstruction and cost
+Isaac ROS Nvblox contains ROS 2 packages for 3D reconstruction and cost
 maps for navigation. `isaac_ros_nvblox` processes depth and pose to
 reconstruct a 3D scene in real-time and outputs a 2D costmap for
 [Nav2](https://github.com/ros-planning/navigation2). The costmap is
@@ -33,14 +33,14 @@ to RViz to update the reconstruction in real-time as it is built.
 
 `isaac_ros_nvblox` offers several modes of operation. In its default mode
 the environment is assumed to be static. Two additional modes of operation are provided
-to support mapping scenes which contain dynamic elements: human reconstruction, for
-mapping scenes containing humans, and dynamic reconstruction, for mapping
+to support mapping scenes which contain dynamic elements: people reconstruction, for
+mapping scenes containing people, and dynamic reconstruction, for mapping
 scenes containing more general dynamic objects.
-The graph above shows `isaac_ros_nvblox` operating in human reconstruction
+The graph above shows `isaac_ros_nvblox` operating in people reconstruction
 mode. The color image corresponding to the depth image is processed with `unet`, using
 the PeopleSemSegNet DNN model to estimate a segmentation mask for
 persons in the color image. Nvblox uses this mask to separate reconstructed persons into a
-separate humans-only part of the reconstruction. The [Technical Details](https://nvidia-isaac-ros.github.io/concepts/scene_reconstruction/nvblox/technical_details.html)
+separate people-only part of the reconstruction. The [Technical Details](https://nvidia-isaac-ros.github.io/concepts/scene_reconstruction/nvblox/technical_details.html)
 provide more information on these three types of mapping.
 
 ## Performance
@@ -54,66 +54,91 @@ The following tables provides timings for various functions of
             <th class="head">Dataset</th>
             <th class="head">Voxel Size (m)</th>
             <th class="head">Component</th>
-            <th class="head">x86_64 w/ 4090 Ti (Desktop)</th>
-            <th class="head">x86_64 w/ RTX3000 Ti (Laptop)</th>
+            <th class="head">x86_64 w/ 3090 (Desktop)</th>
+            <th class="head">x86_64 w/ RTX A3000 (Laptop)</th>
             <th class="head">AGX Orin</th>
+            <th class="head">Orin Nano</th>
         </tr>
     </thead>
     <tbody>
         <tr class="row-even">
-            <td rowspan="4">Replica</td>
-            <td rowspan="4">0.05</td>
+            <td rowspan="5">Replica</td>
+            <td rowspan="5">0.05</td>
             <td>TSDF</td>
-            <td>0.4 ms</td>
-            <td>3.6 ms</td>
-            <td>1.6 ms</td>
+            <td>0.5 ms</td>
+            <td>0.3 ms</td>
+            <td>0.8 ms</td>
+            <td>2.1 ms</td>
         </tr>
         <tr class="row-odd">
             <td>Color</td>
-            <td>1.7 ms</td>
-            <td>2.5 ms</td>
-            <td>4.2 ms</td>
+            <td>0.7 ms</td>
+            <td>0.7 ms</td>
+            <td>1.1 ms</td>
+            <td>3.6 ms</td>
         </tr>
         <tr class="row-even">
             <td>Meshing</td>
-            <td>1.6 ms</td>
-            <td>4.0 ms</td>
-            <td>12.3 ms</td>
+            <td>0.7 ms</td>
+            <td>1.3 ms</td>
+            <td>2.3 ms</td>
+            <td>13 ms</td>
         </tr>
         <tr class="row-odd">
             <td>ESDF</td>
-            <td>1.9 ms</td>
-            <td>8.4 ms</td>
-            <td>8.4 ms</td>
+            <td>0.8 ms</td>
+            <td>1.2 ms</td>
+            <td>1.7 ms</td>
+            <td>6.2 ms</td>
         </tr>
         <tr class="row-even">
-            <td rowspan="4">Redwood</td>
-            <td rowspan="4">0.05</td>
+            <td>Dynamics</td>
+            <td>1.7 ms</td>
+            <td>1.4 ms</td>
+            <td>2.0 ms</td>
+            <td>N/A(\*)</td>
+        </tr>
+        <tr class="row-even">
+            <td rowspan="5">Redwood</td>
+            <td rowspan="5">0.05</td>
             <td>TSDF</td>
             <td>0.2 ms</td>
             <td>0.2 ms</td>
             <td>0.5 ms</td>
+            <td>1.2 ms</td>
         </tr>
         <tr class="row-odd">
             <td>Color</td>
-            <td>1.1 ms</td>
-            <td>1.6 ms</td>
-            <td>2.4 ms</td>
+            <td>0.5 ms</td>
+            <td>0.5 ms</td>
+            <td>0.8 ms</td>
+            <td>2.6 ms</td>
         </tr>
         <tr class="row-even">
             <td>Meshing</td>
-            <td>0.6 ms</td>
-            <td>1.5 ms</td>
-            <td>2.7 ms</td>
+            <td>0.3 ms</td>
+            <td>0.5 ms</td>
+            <td>0.9 ms</td>
+            <td>4.2 ms</td>
         </tr>
         <tr class="row-odd">
             <td>ESDF</td>
+            <td>0.8 ms</td>
+            <td>1.0 ms</td>
             <td>1.5 ms</td>
-            <td>2.6 ms</td>
-            <td>4.2 ms</td>
+            <td>5.1 ms</td>
         </tr>
-    </tbody>
+        <tr class="row-even">
+            <td>Dynamics</td>
+            <td>1.0 ms</td>
+            <td>0.7 ms</td>
+            <td>1.2 ms</td>
+            <td>N/A(\*)</td>
+        </tr>
+     </tbody>
 </table>
+
+(\*): Dynamics not supported on Jetson Nano.
 
 ---
 
@@ -127,6 +152,10 @@ Please visit the [Isaac ROS Documentation](https://nvidia-isaac-ros.github.io/re
 
 * [`isaac_ros_nvblox`](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_nvblox/isaac_ros_nvblox/index.html)
   * [Quickstart](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_nvblox/isaac_ros_nvblox/index.html#quickstart)
+    * [Set Up Development Environment](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_nvblox/isaac_ros_nvblox/index.html#set-up-development-environment)
+    * [Download Quickstart Assets](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_nvblox/isaac_ros_nvblox/index.html#download-quickstart-assets)
+    * [Set Up `isaac_ros_nvblox`](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_nvblox/isaac_ros_nvblox/index.html#set-up-package-name)
+    * [Run Example Launch File](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_nvblox/isaac_ros_nvblox/index.html#run-example-launch-file)
   * [Try More Examples](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_nvblox/isaac_ros_nvblox/index.html#try-more-examples)
   * [API](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_nvblox/isaac_ros_nvblox/index.html#api)
     * [ROS Parameters](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_nvblox/isaac_ros_nvblox/api/parameters.html)
@@ -149,4 +178,4 @@ Please visit the [Isaac ROS Documentation](https://nvidia-isaac-ros.github.io/re
 
 ## Latest
 
-Update 2023-10-18: General dynamic reconstruction.
+Update 2024-12-10: Optimized performance for always-on dynamic obstacle detection and 1 cm voxels

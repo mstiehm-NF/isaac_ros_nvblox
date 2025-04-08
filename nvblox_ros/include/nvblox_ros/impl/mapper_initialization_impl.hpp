@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-// Copyright (c) 2022-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,14 +26,14 @@ namespace nvblox
 {
 
 template<typename T>
-void set_mapper_parameter(
-  const std::string & mapper_name,
+void set_parameter(
+  const std::string & prefix_name,
   const std::string & parameter_name,
   std::function<void(T)> parameter_setter,
   rclcpp::Node * node)
 {
   T parameter_value;
-  const std::string full_name = mapper_name + "." + parameter_name;
+  const std::string full_name = prefix_name + "." + parameter_name;
   if (node->get_parameter<T>(full_name, parameter_value)) {
     // Print non default values
     RCLCPP_INFO_STREAM(

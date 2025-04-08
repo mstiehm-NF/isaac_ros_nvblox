@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,184 +15,114 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from launch import LaunchDescription
-from launch_ros.actions import LoadComposableNodes, Node, SetParameter, SetRemap
-from launch_ros.descriptions import ComposableNode
-from launch.actions import DeclareLaunchArgument, GroupAction
-from launch.conditions import IfCondition, UnlessCondition
-from launch.substitutions import LaunchConfiguration
+from typing import List
+
+from isaac_ros_launch_utils.all_types import *
+import isaac_ros_launch_utils as lu
+
+from nvblox_ros_python_utils.nvblox_launch_utils import NvbloxCamera
+from nvblox_ros_python_utils.nvblox_constants import NVBLOX_CONTAINER_NAME
 
 
-def generate_launch_description():
+def add_vslam(args: lu.ArgumentContainer) -> List[Action]:
+    actions = []
 
-    output_odom_frame_name_arg = DeclareLaunchArgument(
-        'output_odom_frame_name', default_value='odom',
-        description='The name of the VSLAM output frame')
-    run_odometry_flattening_arg = DeclareLaunchArgument(
-        'run_odometry_flattening', default_value='False',
-        description='Whether to flatten the output_odom_frame to 2D (camera only moving on XY-plane).')
+    camera = NvbloxCamera[args.camera]
+    # NOTE(alexmillane, 19.08.2024): At the moment in nvblox_examples we only support a single
+    # camera running cuVSLAM, even in the multi-camera case: we run *nvblox* on multiple
+    # cameras, but cuVSLAM on camera0 only.
+    realsense_remappings = [
+        ('visual_slam/camera_info_0', 'infra1/camera_info'),
+        ('visual_slam/camera_info_1', 'infra2/camera_info'),
+        ('visual_slam/image_0', 'realsense_splitter_node/output/infra_1'),
+        ('visual_slam/image_1', 'realsense_splitter_node/output/infra_2'),
+        ('visual_slam/imu', 'imu'),
+    ]
 
-    # Option to attach the nodes to a shared component container for speed ups through intra process communication.
-    # Make sure to set the 'component_container_name' to the name of the component container you want to attach to.
-    attach_to_shared_component_container_arg = LaunchConfiguration('attach_to_shared_component_container', default=False)
-    component_container_name_arg = LaunchConfiguration('component_container_name', default='vslam_container')
+    # Base frame: 
+    # - camera0_link for single realsense,
+    # - base_link for everything else (multi realsense)
+    if camera is NvbloxCamera.realsense:
+        base_frame = 'base_link'
+    else:
+        base_frame = 'base_link'
 
-    # If we do not attach to a shared component container we have to create our own container.
-    vslam_container = Node(
-        name=component_container_name_arg,
-        namespace=LaunchConfiguration('namespace'),
-        package='rclcpp_components',
-        executable='component_container_mt',
-        output='screen',
-        condition=UnlessCondition(attach_to_shared_component_container_arg)
-    )
+    actions.append(lu.log_info(f'Starting cuVSLAM with base_frame: {base_frame}'))
 
-    load_composable_nodes = LoadComposableNodes(
-        target_container=component_container_name_arg,
-        composable_node_descriptions=[
-            # Vslam node
-            ComposableNode(
-                name='visual_slam_node',
-                namespace=LaunchConfiguration('namespace'),
-                package='isaac_ros_visual_slam',
-                plugin='nvidia::isaac_ros::visual_slam::VisualSlamNode'),
+    base_parameters = {
+        'num_cameras': 2,
+        'min_num_images': 2,
+        'enable_localization_n_mapping': True,
+        'gyro_noise_density': 0.000244,
+        'gyro_random_walk': 0.000019393,
+        'accel_noise_density': 0.001862,
+        'accel_random_walk': 0.003,
+        'calibration_frequency': 200.0,
+        'rig_frame': 'base_link',
+        'imu_frame': 'front_stereo_camera_imu',
+        'enable_slam_visualization': True,
+        'enable_landmarks_view': True,
+        'enable_observations_view': True,
+        'path_max_size': 200,
+        'verbosity': 5,
+        'enable_debug_mode': False,
+        'debug_dump_path': '/tmp/cuvslam',
+        'map_frame': 'map',
+        'odom_frame': 'odom',
+        'base_frame': base_frame,
+    }
+    realsense_parameters = {
+        'enable_rectified_pose': True,
+        'enable_image_denoising': False,
+        'rectified_images': True,
+        'imu_frame': 'camera0_gyro_optical_frame',
+        'camera_optical_frames': [
+            'camera0_infra1_optical_frame',
+            'camera0_infra2_optical_frame',
+        ],
+    }
 
-            # Odom flattener node
-            ComposableNode(
-                name='odometry_flattener_node',
-                namespace=LaunchConfiguration('namespace'),
-                package='odometry_flattener',
-                plugin='nvblox::OdometryFlattenerNode',
-                condition=IfCondition(LaunchConfiguration('run_odometry_flattening'))
-            )])
+    if camera is NvbloxCamera.realsense or NvbloxCamera.multi_realsense:
+        remappings = realsense_remappings
+        camera_parameters = realsense_parameters
+    else:
+        raise Exception(f'Camera {camera} not implemented for vslam.')
 
-    # Conditionals for setup
-    setup_for_realsense = IfCondition(
-        LaunchConfiguration('setup_for_realsense', default='False'))
-    setup_for_isaac_sim = IfCondition(
-        LaunchConfiguration('setup_for_isaac_sim', default='False'))
+    parameters = []
+    parameters.append(base_parameters)
+    parameters.append(camera_parameters)
+    parameters.append(
+        {'enable_ground_constraint_in_odometry': args.enable_ground_constraint_in_odometry})
+    parameters.append({'enable_imu_fusion': args.enable_imu_fusion})
 
-    # Frame name for connecting vslam to flattener
-    odometry_frame_before_flattening_name = 'odom_before_flattening'
+    vslam_node = ComposableNode(
+        name='visual_slam_node',
+        package='isaac_ros_visual_slam',
+        plugin='nvidia::isaac_ros::visual_slam::VisualSlamNode',
+        remappings=remappings,
+        parameters=parameters)
+    actions.append(lu.load_composable_nodes(args.container_name, [vslam_node]))
 
-    group_action = GroupAction([
-        ##########################################
-        ######### VISUAL SLAM NODE SETUP #########
-        ##########################################
+    if args.run_standalone:
+        actions.append(lu.component_container(args.container_name))
 
-        # Set general parameters
-        SetParameter(name='enable_debug_mode', value=False),
-        SetParameter(name='debug_dump_path', value='/tmp/cuvslam'),
-        SetParameter(name='enable_slam_visualization', value=False),
-        SetParameter(name='enable_observations_view', value=False),
-        SetParameter(name='enable_landmarks_view', value=False),
-        SetParameter(name='map_frame', value='map'),
-        SetParameter(name='enable_localization_n_mapping', value=True),
-        SetParameter(name='publish_odom_to_base_tf', value=True),
-        SetParameter(name='publish_map_to_odom_tf', value=True),
-        SetParameter(name='invert_odom_to_base_tf', value=False),
-        SetParameter(name='input_imu_frame', value='camera_gyro_optical_frame'),
-        SetParameter(name='enable_imu_fusion', value=True),
-        SetParameter(name='gyro_noise_density', value=0.000244),
-        SetParameter(name='gyro_random_walk', value=0.000019393),
-        SetParameter(name='accel_noise_density', value=0.001862),
-        SetParameter(name='accel_random_walk', value=0.003),
-        SetParameter(name='calibration_frequency', value=50.0),
-        SetParameter(name='img_jitter_threshold_ms', value=50.00),
-        SetParameter(name='path_max_size', value=10000000),
-        SetParameter(name='force_planar_mode', value=True),
-        # If the odometry flattener is running, the vslam output odom_frame
-        # can not be set to the output_odom_frame.
-        # In that case, the vslam output odom_frame is first flattened by the
-        # odometry flattener node and then published as the output_odom_frame.
-        SetParameter(name='odom_frame', value=LaunchConfiguration('output_odom_frame_name'),
-                     condition=UnlessCondition(LaunchConfiguration('run_odometry_flattening'))),
-        SetParameter(name='odom_frame', value=odometry_frame_before_flattening_name,
-                     condition=IfCondition(LaunchConfiguration('run_odometry_flattening'))),
-
-        # Parameters for Isaac Sim
-        SetParameter(name='use_sim_time', value=True,
-                     condition=setup_for_isaac_sim),
-        SetParameter(name='denoise_input_images', value=True,
-                     condition=setup_for_isaac_sim),
-        SetParameter(name='rectified_images', value=False,
-                     condition=setup_for_isaac_sim),
-        SetParameter(name='base_frame', value='base_link',
-                     condition=setup_for_isaac_sim),
-        SetParameter(name='input_base_frame', value='base_link',
-                     condition=setup_for_isaac_sim),
-        SetParameter(name='input_left_camera_frame', value='camera_left_ROS_frame',
-                     condition=setup_for_isaac_sim),
-        SetParameter(name='input_right_camera_frame', value='camera_right_ROS_frame',
-                     condition=setup_for_isaac_sim),
-
-        # Parameters for Realsense
-        SetParameter(name='enable_rectified_pose', value=True,
-                     condition=setup_for_realsense),
-        SetParameter(name='denoise_input_images', value=False,
-                     condition=setup_for_realsense),
-        SetParameter(name='rectified_images', value=True,
-                     condition=setup_for_realsense),
-        SetParameter(name='base_frame', value='base_link',
-                     condition=setup_for_realsense),
-
-        # Remappings for Isaac Sim
-        SetRemap(src=['/stereo_camera/left/camera_info'],
-                 dst=['/front/stereo_camera/left/camera_info'],
-                 condition=setup_for_isaac_sim),
-        SetRemap(src=['/stereo_camera/right/camera_info'],
-                 dst=['/front/stereo_camera/right/camera_info'],
-                 condition=setup_for_isaac_sim),
-        SetRemap(src=['/stereo_camera/left/image'],
-                 dst=['/front/stereo_camera/left/rgb'],
-                 condition=setup_for_isaac_sim),
-        SetRemap(src=['/stereo_camera/right/image'],
-                 dst=['/front/stereo_camera/right/rgb'],
-                 condition=setup_for_isaac_sim),
-
-        # Remappings for Realsense
-        SetRemap(src=['stereo_camera/left/camera_info'],
-                 dst=['infra1/camera_info'],
-                 condition=setup_for_realsense),
-        SetRemap(src=['stereo_camera/right/camera_info'],
-                 dst=['infra2/camera_info'],
-                 condition=setup_for_realsense),
-        SetRemap(src=['stereo_camera/left/image'],
-                 dst=['realsense_splitter_node/output/infra_1'],
-                 condition=setup_for_realsense),
-        SetRemap(src=['stereo_camera/right/image'],
-                 dst=['realsense_splitter_node/output/infra_2'],
-                 condition=setup_for_realsense),
-        SetRemap(src=['visual_slam/imu'],
-                 dst=['imu'],
-                 condition=setup_for_realsense),
+    return actions
 
 
-        #################################################
-        ######### ODOMETRY FLATTENER NODE SETUP #########
-        #################################################
-
-        # Set odometry flattening parameters
-        SetParameter(name='input_parent_frame_id', value=odometry_frame_before_flattening_name),
-        SetParameter(name='input_child_frame_id', value='base_link',
-                     condition=setup_for_isaac_sim),
-        SetParameter(name='input_child_frame_id', value='base_link',
-                     condition=setup_for_realsense),
-        SetParameter(name='output_parent_frame_id', value=LaunchConfiguration('output_odom_frame_name')),
-        SetParameter(name='output_child_frame_id', value='base_link',
-                     condition=setup_for_isaac_sim),
-        SetParameter(name='output_child_frame_id', value='base_link',
-                     condition=setup_for_realsense),
-        SetParameter(name='invert_output_transform', value=True),
-
-        ########################################
-        ######### ADD COMPOSABLE NODES #########
-        ########################################
-
-        load_composable_nodes
-    ])
-
-    return LaunchDescription([output_odom_frame_name_arg,
-                              run_odometry_flattening_arg,
-                              vslam_container,
-                              group_action])
+def generate_launch_description() -> LaunchDescription:
+    args = lu.ArgumentContainer()
+    args.add_arg('camera')
+    args.add_arg(
+        'enable_ground_constraint_in_odometry',
+        'True',
+        description='Whether to constraint robot movement to a 2d plane (e.g. for AMRs).',
+        cli=True)
+    args.add_arg(
+        'enable_imu_fusion',
+        'True',
+        description='Whether to use imu data in visual slam.',
+        cli=True)
+    args.add_arg('container_name', NVBLOX_CONTAINER_NAME)
+    args.add_arg('run_standalone', 'False')
+    args.add_opaque_function(add_vslam)
+    return LaunchDescription(args.get_launch_actions())
