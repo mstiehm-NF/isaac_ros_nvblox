@@ -48,7 +48,7 @@
   <exec_depend>isaac_ros_visual_slam</exec_depend>
 
   <!-- Segmentation -->
-  <depend>isaac_ros_peoplesemseg_models_install</depend>
+  <!-- <depend>isaac_ros_peoplesemseg_models_install</depend> -->
   <exec_depend>nvblox_image_padding</exec_depend>
   <exec_depend>isaac_ros_dnn_image_encoder</exec_depend>
   <exec_depend>isaac_ros_triton</exec_depend>
@@ -56,7 +56,7 @@
   <exec_depend>semantic_label_conversion</exec_depend>
 
   <!-- Detection -->
-  <depend>isaac_ros_peoplenet_models_install</depend>
+  <!-- <depend>isaac_ros_peoplenet_models_install</depend> -->
   <exec_depend>isaac_ros_detectnet</exec_depend>
 
   <test_depend>ament_cmake_copyright</test_depend>
