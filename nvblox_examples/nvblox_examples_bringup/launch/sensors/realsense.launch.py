@@ -36,23 +36,23 @@ def get_default_run_splitter_list(num_cameras: int) -> List[bool]:
     return run_splitter_list
 
 
-def get_camera_node(camera_name: str, config_file_path: str, serial_number: Optional[int] = None) -> ComposableNode:
+def get_camera_node(camera_name: str, config_file_path: str, serial_number: Optional[int] = None, namespace: str = '') -> ComposableNode:
     parameters = []
     parameters.append(config_file_path)
     parameters.append({'camera_name': camera_name})
     if serial_number:
         parameters.append({'serial_no': str(serial_number)})
     realsense_node = ComposableNode(
-        namespace=camera_name,
+        namespace=namespace,  # Use the namespace argument
         package='realsense2_camera',
         plugin='realsense2_camera::RealSenseNodeFactory',
         parameters=parameters)
     return realsense_node
 
 
-def get_splitter_node(camera_name: str) -> ComposableNode:
+def get_splitter_node(camera_name: str, namespace: str = '') -> ComposableNode:
     realsense_splitter_node = ComposableNode(
-        namespace=camera_name,
+        namespace=namespace,  # Use the namespace argument
         name='realsense_splitter_node',
         package='realsense_splitter',
         plugin='nvblox::RealsenseSplitterNode',
@@ -61,14 +61,14 @@ def get_splitter_node(camera_name: str) -> ComposableNode:
             'output_qos': 'SENSOR_DATA'
         }],
         remappings=[
-            ('input/infra_1', f'/{camera_name}/infra1/image_rect_raw'),
-            ('input/infra_1_metadata', f'/{camera_name}/infra1/metadata'),
-            ('input/infra_2', f'/{camera_name}/infra2/image_rect_raw'),
-            ('input/infra_2_metadata', f'/{camera_name}/infra2/metadata'),
-            ('input/depth', f'/{camera_name}/depth/image_rect_raw'),
-            ('input/depth_metadata', f'/{camera_name}/depth/metadata'),
-            ('input/pointcloud', f'/{camera_name}/depth/color/points'),
-            ('input/pointcloud_metadata', f'/{camera_name}/depth/metadata'),
+            ('input/infra_1', f'{camera_name}/infra1/image_rect_raw'),
+            ('input/infra_1_metadata', f'{camera_name}/infra1/metadata'),
+            ('input/infra_2', f'{camera_name}/infra2/image_rect_raw'),
+            ('input/infra_2_metadata', f'{camera_name}/infra2/metadata'),
+            ('input/depth', f'{camera_name}/depth/image_rect_raw'),
+            ('input/depth_metadata', f'{camera_name}/depth/metadata'),
+            ('input/pointcloud', f'{camera_name}/depth/color/points'),
+            ('input/pointcloud_metadata', f'{camera_name}/depth/metadata'),
         ])
     return realsense_splitter_node
 
@@ -107,12 +107,14 @@ def add_cameras(args: lu.ArgumentContainer) -> List[Action]:
                 camera_name=camera_name,
                 config_file_path=config_file_path,
                 serial_number=camera_serial_number,
+                namespace=f'{args.namespace}/{camera_name}'  # Pass the namespace argument
         ))
         # Splitter
         if run_splitter:
             nodes.append(
                 get_splitter_node(
                     camera_name=camera_name,
+                    namespace=args.namespace  # Pass the namespace argument
             ))
         # Note(xinjieyao: 2024/08/24): Multi-rs launch use RealSenseNodeFactory could be unstable
         # Camera node may fail to launch without any ERROR or app crashes
@@ -128,9 +130,10 @@ def add_cameras(args: lu.ArgumentContainer) -> List[Action]:
 def generate_launch_description() -> LaunchDescription:
     args = lu.ArgumentContainer()
     args.add_arg('container_name', NVBLOX_CONTAINER_NAME)
-    args.add_arg('run_standalone', 'False')
+    args.add_arg('run_standalone', 'True')
     args.add_arg('camera_serial_numbers', '')
     args.add_arg('num_cameras', 1)
+    args.add_arg('namespace', '', description='Namespace for the nodes')  # Add namespace argument
 
     # Adding the cameras
     args.add_opaque_function(add_cameras)
