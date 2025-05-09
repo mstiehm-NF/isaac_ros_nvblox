@@ -15,15 +15,38 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import yaml
+
+from launch import LaunchDescription
+from launch.actions import GroupAction
+from launch.conditions import IfCondition, UnlessCondition
+from launch.substitutions import PythonExpression, OrSubstitution
+
 from isaac_ros_launch_utils.all_types import *
 import isaac_ros_launch_utils as lu
+from launch_ros.actions import PushRosNamespace
+
 
 from nvblox_ros_python_utils.nvblox_launch_utils import NvbloxMode, NvbloxCamera, NvbloxPeopleSegmentation
 from nvblox_ros_python_utils.nvblox_constants import NVBLOX_CONTAINER_NAME
 
+def load_camera_pose(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            data = yaml.safe_load(file)
+        return data
+    except Exception as e:
+        print(f"Error loading camera pose from {file_path}: {e}")
+        # Return default pose if file loading fails
+        return {
+            'translation': {'x': 0.0, 'y': 0.0, 'z': 0.0},
+            'rotation': {'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0}
+        }
 
 def generate_launch_description() -> LaunchDescription:
     args = lu.ArgumentContainer()
+    args.add_arg(
+        'namespace', '', description='Namespace for all nodes and topics.', cli=True)
     args.add_arg(
         'rosbag', 'None', description='Path to rosbag (running on sensor if not set).', cli=True)
     args.add_arg('rosbag_args', '',
@@ -67,14 +90,51 @@ def generate_launch_description() -> LaunchDescription:
         description='Name of the component container.')
     args.add_arg(
         'run_realsense',
-        'True',
+        'False',
         description='Launch Realsense drivers')
     args.add_arg(
         'use_foxglove_whitelist',
         True,
         description='Disable visualization of bandwidth-heavy topics',
         cli=True)
+    args.add_arg(
+        'camera_pose_file',
+        '/usr/config/camera_pose.yaml',
+        description='Path to the camera_pose.yaml file.',
+        cli=True)
+
     actions = args.get_launch_actions()
+
+    # Load camera pose from YAML file
+    # This needs to be done within an OpaqueFunction or similar to use LaunchConfiguration value
+    # For simplicity, we'll create the node with substitutions.
+    # If the file path itself needs to be dynamic via LaunchArg, it's more complex.
+    # Assuming camera_pose_file_arg is resolved correctly by lu.static_transform if it could take it.
+    # Since lu.static_transform expects concrete values for translation/rotation,
+    # we define the node using an OpaqueFunction to load the YAML.
+
+    def static_tf_publisher_setup(context):
+        camera_pose_file_path = args.camera_pose_file.perform(context)
+        camera_pose = load_camera_pose(camera_pose_file_path)
+        x = str(camera_pose['translation']['x'])
+        y = str(camera_pose['translation']['y'])
+        z = str(camera_pose['translation']['z'])
+        roll = str(camera_pose['rotation']['roll'])
+        pitch = str(camera_pose['rotation']['pitch'])
+        yaw = str(camera_pose['rotation']['yaw'])
+        
+        current_namespace = args.namespace.perform(context)
+
+        static_tf_node = lu.static_transform(
+            parent='base_link',
+            child='camera0_link',
+            translation=[x, y, z],
+            orientation_rpy=[roll, pitch, yaw],
+            namespace=current_namespace # Node's namespace, using the performed string
+        )
+        return [static_tf_node]
+
+    actions.append(OpaqueFunction(function=static_tf_publisher_setup))
 
     # Globally set use_sim_time if we're running from bag or sim
     actions.append(
@@ -102,7 +162,8 @@ def generate_launch_description() -> LaunchDescription:
             'nvblox_examples_bringup',
             'launch/sensors/realsense.launch.py',
             launch_arguments={
-                'container_name': args.container_name,
+                'namespace': args.namespace,
+                'container_name': args.container_name, # Consider namespacing this if attach_to_container is true and target is namespaced
                 'camera_serial_numbers': args.camera_serial_numbers,
                 'num_cameras': args.num_cameras,
             },
@@ -114,64 +175,85 @@ def generate_launch_description() -> LaunchDescription:
             'nvblox_examples_bringup',
             'launch/perception/vslam.launch.py',
             launch_arguments={
+                'namespace': args.namespace,
                 'container_name': args.container_name,
                 'camera': camera_mode,
             },
             # Delay for 1 second to make sure that the static topics from the rosbag are published.
             delay=1.0,
         ))
-    # People detection for multi-RS
-    camera_namespaces = ['camera0', 'camera1', 'camera2', 'camera3']
-    camera_input_topics = []
-    input_camera_info_topics= []
-    output_resized_image_topics = []
-    output_resized_camera_info_topics = []
-    for ns in camera_namespaces:
-        camera_input_topics.append(f'/{ns}/color/image_raw')
-        input_camera_info_topics.append(f'/{ns}/color/camera_info')
-        output_resized_image_topics.append(f'/{ns}/segmentation/image_resized')
-        output_resized_camera_info_topics.append(f'/{ns}/segmentation/camera_info_resized')
 
-    # People segmentation
-    actions.append(
-        lu.include(
-            'nvblox_examples_bringup',
-            'launch/perception/segmentation.launch.py',
-            launch_arguments={
-                'container_name': args.container_name,
-                'people_segmentation': args.people_segmentation,
-                'namespace_list': camera_namespaces,
-                'input_topic_list': camera_input_topics,
-                'input_camera_info_topic_list': input_camera_info_topics,
-                'output_resized_image_topic_list': output_resized_image_topics,
-                'output_resized_camera_info_topic_list': output_resized_camera_info_topics,
-                'num_cameras': args.num_cameras,
-                # fixing rosbag replay dropping fps
-                'one_container_per_camera': True
-            },
-            condition=IfCondition(lu.has_substring(args.mode, NvbloxMode.people_segmentation))))
+    # Prepare topic lists for segmentation and detection based on namespace
+    # These lists are now generated inside an OpaqueFunction to use resolved launch arguments
+    def setup_dynamic_topic_lists(context):
+        num_cameras_val_str = args.num_cameras.perform(context)
+        try:
+            num_cameras_val = int(num_cameras_val_str)
+        except ValueError:
+            print(f"Warning: Could not parse num_cameras '{num_cameras_val_str}' as int, defaulting to 1.")
+            num_cameras_val = 1
+        
+        current_namespace_val = args.namespace.perform(context)
 
-    # People detection
-    actions.append(
-        lu.include(
-            'nvblox_examples_bringup',
-            'launch/perception/detection.launch.py',
-            launch_arguments={
-                'namespace_list': camera_namespaces,
-                'input_topic_list': camera_input_topics,
-                'num_cameras': args.num_cameras,
-                'container_name': args.container_name,
-                # fixing rosbag replay dropping fps
-                'one_container_per_camera': True
-            },
-            condition=IfCondition(lu.has_substring(args.mode, NvbloxMode.people_detection))))
+        # Base names for cameras, used for node sub-namespacing in detection/segmentation
+        camera_base_names_list = [f'camera{i}' for i in range(num_cameras_val)]
+        
+        # Full topic paths, prefixed with the global namespace
+        camera_input_topics_list = [f"{current_namespace_val}/{name}/color/image_raw" if current_namespace_val else f"/{name}/color/image_raw" for name in camera_base_names_list]
+        input_camera_info_topics_list = [f"{current_namespace_val}/{name}/color/camera_info" if current_namespace_val else f"/{name}/color/camera_info" for name in camera_base_names_list]
+        output_resized_image_topics_list = [f"{current_namespace_val}/{name}/segmentation/image_resized" if current_namespace_val else f"/{name}/segmentation/image_resized" for name in camera_base_names_list]
+        output_resized_camera_info_topics_list = [f"{current_namespace_val}/{name}/segmentation/camera_info_resized" if current_namespace_val else f"/{name}/segmentation/camera_info_resized" for name in camera_base_names_list]
 
+        segmentation_actions = []
+        detection_actions = []
+
+        # Check if 'people_segmentation' is part of the mode string
+        mode_str = args.mode.perform(context) # Get the evaluated mode string
+        if NvbloxMode.people_segmentation.name in mode_str: # Compare with enum's name
+            segmentation_actions.append(
+                lu.include(
+                    'nvblox_examples_bringup',
+                    'launch/perception/segmentation.launch.py',
+                    launch_arguments={
+                        'namespace': args.namespace, # Global namespace for the launch file
+                        'container_name': args.container_name,
+                        'people_segmentation': args.people_segmentation,
+                        'namespace_list': camera_base_names_list, # Base names for sub-namespacing
+                        'input_topic_list': camera_input_topics_list,
+                        'input_camera_info_topic_list': input_camera_info_topics_list,
+                        'output_resized_image_topic_list': output_resized_image_topics_list,
+                        'output_resized_camera_info_topic_list': output_resized_camera_info_topics_list,
+                        'num_cameras': args.num_cameras,
+                        'one_container_per_camera': True 
+                    }
+                )
+            )
+        
+        if NvbloxMode.people_detection.name in mode_str: # Compare with enum's name
+            detection_actions.append(
+                lu.include(
+                    'nvblox_examples_bringup',
+                    'launch/perception/detection.launch.py',
+                    launch_arguments={
+                        'namespace': args.namespace, # Global namespace
+                        'namespace_list': camera_base_names_list, # Base names for sub-namespacing
+                        'input_topic_list': camera_input_topics_list, # Full input topic paths
+                        'num_cameras': args.num_cameras,
+                        'container_name': args.container_name,
+                        'one_container_per_camera': True
+                    }
+                )
+            )
+        return segmentation_actions + detection_actions
+
+    actions.append(OpaqueFunction(function=setup_dynamic_topic_lists))
     # Nvblox
     actions.append(
         lu.include(
             'nvblox_examples_bringup',
             'launch/perception/nvblox.launch.py',
             launch_arguments={
+                'namespace': args.namespace,
                 'container_name': args.container_name,
                 'mode': args.mode,
                 'camera': camera_mode,
@@ -179,41 +261,25 @@ def generate_launch_description() -> LaunchDescription:
             }))
 
     # TF transforms for multi-realsense
-    actions.append(
-        lu.add_robot_description(robot_calibration_path=args.multicam_urdf_path,
-                                 condition=is_multi_cam)
+    # Wrap robot_state_publisher in a GroupAction with PushRosNamespace
+    robot_state_publisher_group = GroupAction(
+        actions=[
+            PushRosNamespace(args.namespace),
+            lu.add_robot_description(
+                robot_calibration_path=args.multicam_urdf_path,
+                # The lu.add_robot_description itself doesn't take a namespace for the node.
+                # Pushing the namespace should affect nodes created within this group.
+            )
+        ],
+        condition=is_multi_cam
     )
-
-    # Play ros2bag
-    actions.append(
-        lu.play_rosbag(
-            bag_path=args.rosbag,
-            additional_bag_play_args=args.rosbag_args,
-            condition=IfCondition(lu.is_valid(args.rosbag))))
-
-    # Visualization
-    actions.append(
-        lu.include(
-            'nvblox_examples_bringup',
-            'launch/visualization/visualization.launch.py',
-            launch_arguments={
-                'mode': args.mode,
-                'camera': camera_mode,
-                'use_foxglove_whitelist': args.use_foxglove_whitelist,
-            }))
+    actions.append(robot_state_publisher_group)
 
     # Container
-    # NOTE: By default (attach_to_container:=False) we launch a container which all nodes are
-    # added to, however, we expose the option to not launch a container, and instead attach to
-    # an already running container. The reason for this is that when running live on multiple
-    # realsenses we have experienced unreliability in the bringup of multiple realsense drivers.
-    # To (partially) mitigate this issue the suggested workflow for multi-realsenses is to:
-    # 1. Launch RS (cameras & splitter) and start a component_container
-    # 2. Launch nvblox + cuvslam and attached to the above running component container
-
     actions.append(
         lu.component_container(
-            NVBLOX_CONTAINER_NAME, condition=UnlessCondition(args.attach_to_container),
+            args.container_name, # The name of the container itself
+            condition=UnlessCondition(args.attach_to_container),
             log_level=args.log_level))
 
     return LaunchDescription(actions)
