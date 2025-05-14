@@ -19,6 +19,8 @@ from typing import List, Optional, Union
 
 from isaac_ros_launch_utils.all_types import *
 import isaac_ros_launch_utils as lu
+# Ensure LaunchConfiguration is available
+from launch.substitutions import LaunchConfiguration
 
 from nvblox_ros_python_utils.nvblox_constants import NVBLOX_CONTAINER_NAME
 
@@ -41,13 +43,19 @@ def get_camera_node(
     camera_name: str,
     config_file_path: str,
     serial_number: Optional[str] = None, # Serial number should be string
-    namespace: Union[str, Substitution, List[Union[str, Substitution]]] = ''
+    namespace: Union[str, Substitution, List[Union[str, Substitution]]] = '',
+    imu_optical_frame_id_override: Optional[str] = None # New argument for IMU frame ID
 ) -> ComposableNode:
     parameters = []
     parameters.append(config_file_path)
     parameters.append({'camera_name': camera_name})
     if serial_number and serial_number.lower() != 'none' and serial_number != '':
         parameters.append({'serial_no': serial_number})
+    
+    # Add the IMU frame ID override if provided and not empty
+    if imu_optical_frame_id_override and imu_optical_frame_id_override.strip():
+        parameters.append({'imu_optical_frame_id': imu_optical_frame_id_override})
+        
     realsense_node = ComposableNode(
         namespace=namespace,
         package='realsense2_camera',
@@ -61,18 +69,14 @@ def get_splitter_node(
     camera_name: str,
     namespace: Union[str, Substitution, List[Union[str, Substitution]]] = ''
 ) -> ComposableNode:
-    # Construct remappings with the global namespace if provided
-    # The camera_name itself is already part of the sub-namespace for topics
-    
-    # If namespace is a LaunchConfiguration or list containing it, it will be resolved.
-    # If namespace is an empty string, topics will be relative to the node's final namespace.
-    # If namespace is a non-empty string, it's a fixed prefix.
-
-    # The f-string for remappings should use camera_name directly, as it's a local sub-identifier.
-    # The overall node namespace is handled by the 'namespace' parameter of ComposableNode.
+    # The remappings are relative to the node's final resolved namespace.
+    # The topics from realsense2_camera node are already sub-namespaced by camera_name
+    # (e.g., /<global_ns>/<camera_name>/infra1/image_rect_raw).
+    # The splitter node's remappings should map its internal topic names
+    # to these existing, fully-qualified (or relative to node ns) topic names.
     realsense_splitter_node = ComposableNode(
-        namespace=namespace,
-        name='realsense_splitter_node',
+        namespace=namespace, # This will be like [LaunchConfig('namespace'), '/', 'cameraX']
+        name=f'{camera_name}_realsense_splitter_node', # Unique name for splitter
         package='realsense_splitter',
         plugin='nvblox::RealsenseSplitterNode',
         parameters=[{
@@ -80,6 +84,9 @@ def get_splitter_node(
             'output_qos': 'SENSOR_DATA'
         }],
         remappings=[
+            # These topics are expected to be published by the realsense_camera_node
+            # already under its own sub-namespace (e.g., camera0/infra1/image_rect_raw).
+            # The splitter node is in the same sub-namespace.
             ('input/infra_1', 'infra1/image_rect_raw'),
             ('input/infra_1_metadata', 'infra1/metadata'),
             ('input/infra_2', 'infra2/image_rect_raw'),
@@ -87,7 +94,7 @@ def get_splitter_node(
             ('input/depth', 'depth/image_rect_raw'),
             ('input/depth_metadata', 'depth/metadata'),
             ('input/pointcloud', 'depth/color/points'),
-            ('input/pointcloud_metadata', 'depth/metadata'),
+            ('input/pointcloud_metadata', 'depth/metadata'), # Assuming depth metadata can serve for pointcloud
         ])
     return realsense_splitter_node
 
@@ -100,99 +107,92 @@ def add_cameras(context: LaunchContext, args_container: lu.ArgumentContainer) ->
     camera_serial_numbers_str = args_container.camera_serial_numbers.perform(context)
     num_cameras_str = args_container.num_cameras.perform(context)
     container_name_str = args_container.container_name.perform(context)
-    # args_container.namespace is a LaunchConfiguration, can be passed directly to nodes
+    imu_optical_frame_id_override_str = args_container.imu_optical_frame_id_override.perform(context)
+
+    # Use LaunchConfiguration('namespace') directly to get the substitution object
+    namespace_lc = LaunchConfiguration('namespace')
+    resolved_namespace_for_log = namespace_lc.perform(context)
+
 
     # Serial numbers.
     if not camera_serial_numbers_str or camera_serial_numbers_str.lower() == 'none':
-        # If no serial numbers are provided, we might operate based on num_cameras without specific serials
-        # Assuming RealSenseNodeFactory can handle finding cameras by index if serial_no is not given
-        camera_serial_numbers_list = [None] * int(num_cameras_str) # Create a list of Nones
+        camera_serial_numbers_list = [None] * int(num_cameras_str) 
     else:
         camera_serial_numbers_list = camera_serial_numbers_str.split(',')
     
-    # Number of cameras to run
     try:
         num_cameras_val = int(num_cameras_str)
     except ValueError:
         raise ValueError(f"Invalid value for num_cameras: '{num_cameras_str}'. Must be an integer.")
 
     if not camera_serial_numbers_list and num_cameras_val > 0 :
-         # This case implies num_cameras > 0 but no serials.
-         # We'll rely on the driver to pick cameras if serials are None.
          camera_serial_numbers_list = [None] * num_cameras_val
 
-
     if num_cameras_val > len(camera_serial_numbers_list) and any(s is not None for s in camera_serial_numbers_list):
-        # If specific serials are given, num_cameras cannot exceed the count of these serials.
          raise ValueError(
             f"num_cameras ({num_cameras_val}) cannot exceed the number of "
             f"provided camera_serial_numbers ({len(camera_serial_numbers_list)}) "
             "when serial numbers are specified."
         )
     
-    # Run splitter list. I.e. a list of bools indicating per-camera if we should run a splitter.
-    # This should be based on num_cameras_val, the actual number of cameras we will launch.
     run_splitter_list = get_default_run_splitter_list(num_cameras_val)
 
     actions = []
     for idx in range(num_cameras_val):
-        # Use serial number if available for this index, otherwise None
         camera_serial_number = camera_serial_numbers_list[idx] if idx < len(camera_serial_numbers_list) else None
         run_splitter = run_splitter_list[idx]
         
-        nodes_for_this_camera = [] # Renamed to avoid conflict with outer 'nodes' if any
+        nodes_for_this_camera = [] 
         camera_name = f'camera{idx}'
         
-        # Config file
         if run_splitter:
             config_file_path = EMITTER_FLASHING_CONFIG_FILE_PATH
         else:
             config_file_path = EMITTER_ON_CONFIG_FILE_PATH
             
-        # Log message uses resolved Python variables
         log_message = lu.log_info(
             f'Setting up Realsense camera: {camera_name} '
             f'(Serial: {camera_serial_number if camera_serial_number else "Any"}), '
             f'Running splitter: {run_splitter}, '
-            f'Namespace: {args_container.namespace.perform(context) if isinstance(args_container.namespace, Substitution) else args_container.namespace}'
+            f'Namespace: {resolved_namespace_for_log}'
         )
         
-        # Define the full namespace for the camera node
-        # This will be [GlobalNamespaceLaunchConfig, '/', 'cameraX']
-        camera_node_namespace = [args_container.namespace, '/', camera_name]
+        camera_node_ns_list = [namespace_lc, '/', camera_name]
+
+        current_imu_override = None
+        if idx == 0 and imu_optical_frame_id_override_str.strip():
+            current_imu_override = imu_optical_frame_id_override_str
+            log_message_imu = lu.log_info(f"Applying imu_optical_frame_id_override='{current_imu_override}' to {camera_name}")
+            actions.append(log_message_imu)
 
         nodes_for_this_camera.append(
             get_camera_node(
-                camera_name=camera_name, # This is for topic sub-namespacing, not the node's ROS namespace
+                camera_name=camera_name, 
                 config_file_path=config_file_path,
                 serial_number=camera_serial_number,
-                namespace=camera_node_namespace # Pass the constructed full namespace
+                namespace=camera_node_ns_list, 
+                imu_optical_frame_id_override=current_imu_override
         ))
         
-        # Splitter
         if run_splitter:
-            # The splitter for camera0 should also be under the camera0 sub-namespace
-            # but also respect the global namespace.
-            splitter_node_namespace = [args_container.namespace, '/', camera_name]
+            splitter_node_ns_list = [namespace_lc, '/', camera_name]
             nodes_for_this_camera.append(
                 get_splitter_node(
-                    camera_name=camera_name, # For remappings
-                    namespace=splitter_node_namespace # Pass the constructed full namespace
+                    camera_name=camera_name, 
+                    namespace=splitter_node_ns_list
             ))
             
-        # Load composable nodes for this camera with a delay
-        # lu.load_composable_nodes expects a string for container_name
         load_nodes_action = lu.load_composable_nodes(container_name_str, nodes_for_this_camera)
         
-        actions.append(log_message) # Log before trying to load
-        if idx > 0: # Add delay only for subsequent cameras
+        actions.append(log_message)
+        if idx > 0: 
             actions.append(
                 TimerAction(
-                    period=float(idx * 10.0), # Ensure period is float
+                    period=float(idx * 10.0), 
                     actions=[load_nodes_action]
                 )
             )
-        else: # Load first camera immediately
+        else: 
             actions.append(load_nodes_action)
 
     return actions
@@ -205,18 +205,16 @@ def generate_launch_description() -> LaunchDescription:
     args.add_arg('camera_serial_numbers', '', description="Comma-separated list of camera serial numbers. Leave empty to auto-detect.", cli=True)
     args.add_arg('num_cameras', 1, description="Number of cameras to launch.", cli=True)
     args.add_arg('namespace', '', description='Global namespace for all nodes in this launch file.', cli=True)
+    args.add_arg('imu_optical_frame_id_override', '', description='Override for the IMU optical frame ID for camera0. If empty, driver default is used.', cli=True)
 
-    # Use a lambda to pass both context and the args ArgumentContainer
     args.add_opaque_function(lambda context: add_cameras(context, args))
     
-    # Get all actions, including OpaqueFunction and DeclareLaunchArguments
     launch_actions = args.get_launch_actions() 
     
-    # Add the component container if running standalone
     launch_actions.append(
         lu.component_container(
-            args.container_name, # This is the name of the container node
-            condition=IfCondition(lu.is_true(args.run_standalone))
+            LaunchConfiguration('container_name'), 
+            condition=IfCondition(lu.is_true(LaunchConfiguration('run_standalone')))
         )
     )
     return LaunchDescription(launch_actions)
