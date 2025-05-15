@@ -76,7 +76,7 @@ def get_splitter_node(
     # to these existing, fully-qualified (or relative to node ns) topic names.
     realsense_splitter_node = ComposableNode(
         namespace=namespace, # This will be like [LaunchConfig('namespace'), '/', 'cameraX']
-        name=f'{camera_name}_realsense_splitter_node', # Unique name for splitter
+        name='realsense_splitter_node',
         package='realsense_splitter',
         plugin='nvblox::RealsenseSplitterNode',
         parameters=[{
@@ -112,7 +112,6 @@ def add_cameras(context: LaunchContext, args_container: lu.ArgumentContainer) ->
     # Use LaunchConfiguration('namespace') directly to get the substitution object
     namespace_lc = LaunchConfiguration('namespace')
     resolved_namespace_for_log = namespace_lc.perform(context)
-
 
     # Serial numbers.
     if not camera_serial_numbers_str or camera_serial_numbers_str.lower() == 'none':
