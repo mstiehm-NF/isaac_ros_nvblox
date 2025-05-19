@@ -1,7 +1,7 @@
 /**:
   ros__parameters:
     # cuda stream setting
-    cuda_stream_type: 1  # 0: cuda default stream, 1: blocking async stream, 2: non blocking async stream, 3: per-thread default stream.
+    cuda_stream_type: 0  # 0: cuda default stream, 1: blocking async stream, 2: non blocking async stream, 3: per-thread default stream.
     # miscellaneous
     voxel_size: 0.05
     num_cameras: 1
@@ -44,7 +44,7 @@
     lidar_max_valid_range_m: 50.0
     use_non_equal_vertical_fov_lidar_params: false
     # Input queues
-    maximum_input_queue_length: 10
+    maximum_input_queue_length: 100
     # Map clearing settings
     map_clearing_radius_m: 3.0 # no map clearing if < 0.0
     map_clearing_frame_id: "base_link"
@@ -52,14 +52,14 @@
     input_qos: "SYSTEM_DEFAULT"
     # Visualization
     esdf_slice_bounds_visualization_attachment_frame_id: "base_link"
-    esdf_slice_bounds_visualization_side_length: 10.0
+    esdf_slice_bounds_visualization_side_length: 5.0
     workspace_height_bounds_visualization_attachment_frame_id: "base_link"
-    workspace_height_bounds_visualization_side_length: 10.0
+    workspace_height_bounds_visualization_side_length: 5.0
     layer_visualization_min_tsdf_weight: 0.1
     layer_visualization_exclusion_height_m: 2.0
-    layer_visualization_exclusion_radius_m: 7.0
+    layer_visualization_exclusion_radius_m: 5.0
     layer_visualization_undo_gamma_correction: false
-    max_back_projection_distance: 7.0
+    max_back_projection_distance: 5.0
     back_projection_subsampling: 1 # no subsampling if == 1
     layer_streamer_bandwidth_limit_mbps: -1.0 # unlimited
 
