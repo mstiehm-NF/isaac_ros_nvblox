@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2021-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,9 +46,12 @@ find_package(geometry_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/FilePath.srv"
+  "srv/EsdfAndGradients.srv"
   "msg/SemanticLabelsStamped.msg"
   "msg/MeshBlock.msg"
   "msg/Mesh.msg"
+  "msg/VoxelBlock.msg"
+  "msg/VoxelBlockLayer.msg"
   "msg/Index3D.msg"
   "msg/DistanceMapSlice.msg"
   DEPENDENCIES std_msgs geometry_msgs

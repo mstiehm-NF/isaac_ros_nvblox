@@ -25,7 +25,6 @@
 namespace nvblox {
 namespace conversions {
 
-
 void copyDevicePointcloudToMsg(
     const device_vector<PclPointXYZI>& pcl_pointcloud_device,
     sensor_msgs::msg::PointCloud2* pointcloud_msg) {
@@ -62,18 +61,16 @@ void copyDevicePointcloudToMsg(
   pointcloud_msg->fields.push_back(point_field);
 }
 
-
 PointcloudConverter::PointcloudConverter()
     : PointcloudConverter(std::make_shared<CudaStreamOwning>()) {}
 
-PointcloudConverter::PointcloudConverter(std::shared_ptr<CudaStream> cuda_stream)
+PointcloudConverter::PointcloudConverter(
+    std::shared_ptr<CudaStream> cuda_stream)
     : cuda_stream_(cuda_stream) {}
 
-
 bool PointcloudConverter::checkLidarPointcloud(
-  const sensor_msgs::msg::PointCloud2::ConstSharedPtr & pointcloud,
-  const Lidar & lidar)
-{
+    const sensor_msgs::msg::PointCloud2::ConstSharedPtr& pointcloud,
+    const Lidar& lidar) {
   // Check the cache
   if (checked_lidar_models_.find(lidar) != checked_lidar_models_.end()) {
     return true;
@@ -84,7 +81,7 @@ bool PointcloudConverter::checkLidarPointcloud(
   sensor_msgs::PointCloud2ConstIterator<float> iter_xyz(*pointcloud, "x");
   for (; iter_xyz != iter_xyz.end(); ++iter_xyz) {
     Vector3f point(iter_xyz[0], iter_xyz[1], iter_xyz[2]);
-    if (point.hasNaN()) {
+    if (point.hasNaN() || !lidar.isInValidRange(point)) {
       continue;
     }
     Vector2f u_C;
@@ -98,9 +95,8 @@ bool PointcloudConverter::checkLidarPointcloud(
 }
 
 void PointcloudConverter::writeLidarPointcloudToFile(
-  const std::string filepath_prefix,
-  const sensor_msgs::msg::PointCloud2::ConstSharedPtr & pointcloud)
-{
+    const std::string filepath_prefix,
+    const sensor_msgs::msg::PointCloud2::ConstSharedPtr& pointcloud) {
   // Write the dimensions
   std::ofstream width_file(filepath_prefix + "_dims.txt", std::ofstream::out);
   width_file << pointcloud->width << ", " << pointcloud->height;
@@ -116,7 +112,6 @@ void PointcloudConverter::writeLidarPointcloudToFile(
   }
   io::writeToCsv(filepath_prefix + ".csv", pointcloud_matrix);
 }
-
 
 __global__ void depthImageFromPointcloudKernel(
     const Vector3f* pointcloud,          // NOLINT
@@ -167,7 +162,7 @@ void PointcloudConverter::depthImageFromPointcloudGPU(
   }
 
   // Set the entire image to 0.
-  depth_image_ptr->setZero();
+  depth_image_ptr->setZeroAsync(*cuda_stream_);
 
   // Get a pointer to the pointcloud
   sensor_msgs::PointCloud2ConstIterator<float> iter_xyz(*pointcloud, "x");
@@ -176,14 +171,15 @@ void PointcloudConverter::depthImageFromPointcloudGPU(
   const int num_points = pointcloud->width * pointcloud->height;
 
   // Expand buffers where required
-  if (lidar.numel() > lidar_pointcloud_host_.capacity()) {
+  if (static_cast<size_t>(lidar.numel()) > lidar_pointcloud_host_.capacity()) {
     const int new_size = static_cast<int>(lidar.numel());
-    lidar_pointcloud_host_.reserve(new_size);
-    lidar_pointcloud_device_.reserve(new_size);
+    lidar_pointcloud_host_.reserveAsync(new_size, *cuda_stream_);
+    lidar_pointcloud_device_.reserveAsync(new_size, *cuda_stream_);
+    cuda_stream_->synchronize();
   }
 
   // Copy the pointcloud into pinned host memory
-  lidar_pointcloud_host_.clear();
+  lidar_pointcloud_host_.clearNoDeallocate();
   for (; iter_xyz != iter_xyz.end(); ++iter_xyz) {
     lidar_pointcloud_host_.push_back(
         Vector3f(iter_xyz[0], iter_xyz[1], iter_xyz[2]));
@@ -221,7 +217,7 @@ void PointcloudConverter::pointcloudMsgFromPointcloud(
   CHECK(pointcloud.memory_type() == MemoryType::kDevice ||
         pointcloud.memory_type() == MemoryType::kUnified);
 
-  pcl_pointcloud_device_.resize(pointcloud.size());
+  pcl_pointcloud_device_.resizeAsync(pointcloud.size(), *cuda_stream_);
 
   thrust::transform(thrust::device, pointcloud.points().begin(),
                     pointcloud.points().end(), pcl_pointcloud_device_.begin(),

@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: NVIDIA CORPORATION & AFFILIATES
-# Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,82 +15,72 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
+from isaac_ros_launch_utils.all_types import *
+import isaac_ros_launch_utils as lu
 
-from ament_index_python.packages import get_package_share_directory
-from launch import LaunchDescription
-from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
-from launch.conditions import IfCondition, UnlessCondition
-from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from nvblox_ros_python_utils.nvblox_launch_utils import NvbloxMode, NvbloxCamera
+from nvblox_ros_python_utils.nvblox_constants import NVBLOX_CONTAINER_NAME
 
 
-def generate_launch_description():
+def generate_launch_description() -> LaunchDescription:
+    args = lu.ArgumentContainer()
+    args.add_arg(
+        'camera',
+        NvbloxCamera.zed2,
+        choices=[str(NvbloxCamera.zed2), str(NvbloxCamera.zedx)],
+        description='The ZED camera type.',
+        cli=True)
+    args.add_arg(
+        'rosbag', 'None', description='Path to rosbag (running on sensor if not set).', cli=True)
+    args.add_arg('rosbag_args', '', description='Additional args for ros2 bag play.', cli=True)
+    args.add_arg('log_level', 'info', choices=['debug', 'info', 'warn'], cli=True)
+    actions = args.get_launch_actions()
 
-    bringup_dir = get_package_share_directory('nvblox_examples_bringup')
+    # Globally set use_sim_time if we're running from bag or sim
+    actions.append(
+        SetParameter('use_sim_time', True, condition=IfCondition(lu.is_valid(args.rosbag))))
 
-    # Launch Arguments
-    run_rviz_arg = DeclareLaunchArgument(
-        'run_rviz', default_value='True',
-        description='Whether to start RVIZ')
-    from_bag_arg = DeclareLaunchArgument(
-        'from_bag', default_value='False',
-        description='Whether to run from a bag or live zed data')
-    bag_path_arg = DeclareLaunchArgument(
-        'bag_path', default_value='rosbag2*',
-        description='Path of the bag (only used if from_bag == True)')
-    global_frame = LaunchConfiguration('global_frame',
-                                       default='odom')
+    # Container
+    actions.append(lu.component_container(NVBLOX_CONTAINER_NAME, log_level=args.log_level))
 
-    # Create a shared container to hold composable nodes 
-    # for speed ups through intra process communication.
-    shared_container_name = "shared_nvblox_container"
-    shared_container = Node(
-        name=shared_container_name,
-        package='rclcpp_components',
-        executable='component_container_mt',
-        output='screen')
-    
-    # ZED
-    # Note(remos): This was only tested with a ZED2 camera so far.
-    zed_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            bringup_dir, 'launch', 'sensors', 'zed2.launch.py')]),
-        launch_arguments={
-            'attach_to_shared_component_container': 'True',
-            'component_container_name': shared_container_name}.items(),
-        condition=UnlessCondition(LaunchConfiguration('from_bag')))
+    # ZED driver
+    actions.append(
+        lu.include(
+            'nvblox_examples_bringup',
+            'launch/sensors/zed.launch.py',
+            launch_arguments={
+                'container_name': NVBLOX_CONTAINER_NAME,
+                'zed_camera_model': args.camera,
+            },
+            condition=UnlessCondition(lu.is_valid(args.rosbag))))
 
     # Nvblox
-    nvblox_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            bringup_dir, 'launch', 'nvblox', 'nvblox.launch.py')]),
-        launch_arguments={'global_frame': global_frame,
-                          'setup_for_zed': 'True',
-                          'attach_to_shared_component_container': 'True',
-                          'component_container_name': shared_container_name}.items())
+    actions.append(
+        lu.include(
+            'nvblox_examples_bringup',
+            'launch/perception/nvblox.launch.py',
+            launch_arguments={
+                'container_name': NVBLOX_CONTAINER_NAME,
+                'mode': NvbloxMode.static,
+                'camera': args.camera,
+            },
+        ))
 
-    # Ros2 bag
-    bag_play = ExecuteProcess(
-        cmd=['ros2', 'bag', 'play', LaunchConfiguration('bag_path')],
-        shell=True, output='screen',
-        condition=IfCondition(LaunchConfiguration('from_bag')))
+    # Play ros2bag
+    actions.append(
+        lu.play_rosbag(
+            bag_path=args.rosbag,
+            additional_bag_play_args=args.rosbag_args,
+            condition=IfCondition(lu.is_valid(args.rosbag))))
 
-    # Rviz
-    rviz_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            bringup_dir, 'launch', 'rviz', 'rviz.launch.py')]),
-        launch_arguments={'config_name': 'zed_example.rviz',
-                          'global_frame': global_frame}.items(),
-        condition=IfCondition(LaunchConfiguration('run_rviz')))
+    # Visualization
+    actions.append(
+        lu.include(
+            'nvblox_examples_bringup',
+            'launch/visualization/visualization.launch.py',
+            launch_arguments={
+                'mode': NvbloxMode.static,
+                'camera': args.camera
+            }))
 
-    return LaunchDescription([
-        run_rviz_arg,
-        from_bag_arg,
-        bag_path_arg,
-        shared_container,
-        zed_launch,
-        nvblox_launch,
-        bag_play,
-        rviz_launch])
+    return LaunchDescription(actions)
