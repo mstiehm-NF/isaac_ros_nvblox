@@ -50,6 +50,6 @@ pointcloud_texture_stream: RS2_STREAM_ANY
 enable_sync: true
 align_depth: true
 
-gyro_fps: 100
-accel_fps: 100
+gyro_fps: 200
+accel_fps: 63
 unite_imu_method: 2
