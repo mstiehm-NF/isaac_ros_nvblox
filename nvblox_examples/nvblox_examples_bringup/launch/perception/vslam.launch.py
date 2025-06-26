@@ -59,7 +59,7 @@ def add_vslam(context: LaunchContext, args: lu.ArgumentContainer) -> List[Action
         'gyro_random_walk': 0.000019393,
         'accel_noise_density': 0.001862,
         'accel_random_walk': 0.003,
-        'calibration_frequency': 200.0,
+        'calibration_frequency': 60.0,
         'rig_frame': rig_frame_tf, 
         'enable_slam_visualization': False,
         'enable_landmarks_view': False,
