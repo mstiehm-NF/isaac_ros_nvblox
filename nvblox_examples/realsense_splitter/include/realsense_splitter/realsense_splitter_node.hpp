@@ -19,6 +19,7 @@
 #define REALSENSE_SPLITTER__REALSENSE_SPLITTER_NODE_HPP_
 
 #include <message_filters/subscriber.h>
+#include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/sync_policies/exact_time.h>
 
 #include <memory>
@@ -75,10 +76,10 @@ private:
     typename rclcpp::Publisher<MessageType>::SharedPtr & publisher);
 
   // Time Sync policies for image and pointcloud messages.
-  typedef message_filters::sync_policies::ExactTime<
+  typedef message_filters::sync_policies::ApproximateTime<
       sensor_msgs::msg::Image, realsense2_camera_msgs::msg::Metadata>
     image_time_policy_t;
-  typedef message_filters::sync_policies::ExactTime<
+  typedef message_filters::sync_policies::ApproximateTime<
       sensor_msgs::msg::PointCloud2, realsense2_camera_msgs::msg::Metadata>
     pointcloud_time_policy_t;
 
